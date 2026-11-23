@@ -40,7 +40,7 @@ def get_gcp_project_id() -> str:
   try:
     from google.colab import userdata
 
-    project_id = userdata.get("GCP_PROJECT_ID")
+    project_id = os.getenv("GCP_PROJECT_ID")
     if project_id:
       return project_id
   except Exception:
