@@ -1,0 +1,28 @@
+# Variáveis de ambiente e credenciais GCP
+.env
+.env.*
+!.env.example
+*.json
+*credentials*.json
+*service-account*.json
+
+# Datasets em cache e arquivos pesados
+*.parquet
+*.csv
+*.zip
+data/raw/
+data/processed/
+
+# Artefatos de modelos (PyTorch e AutoGluon/MITRA)
+ag_tabfm_*/
+AutogluonModels/
+*.pt
+*.pth
+*.ckpt
+
+# Python e Jupyter/Colab
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
