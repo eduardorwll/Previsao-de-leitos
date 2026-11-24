@@ -224,3 +224,39 @@ def estimate_surge_probability_from_quantiles(
         cdf = float(np.interp(float(thr), row, q_probs, left=0.05, right=0.98))
         probs[i] = float(np.clip(1.0 - cdf, 0.0, 1.0))
     return probs
+
+
+def basin_cluster_bootstrap_ci(
+    values: np.ndarray,
+    clusters: Sequence[str],
+    *,
+    n_boot: int = 400,
+    seed: int = 42,
+) -> BootstrapCI:
+    """Calcula IC 95% via cluster-bootstrap por bacia hidrográfica (respeitando dependência)."""
+    vals = np.asarray(values, dtype=np.float64)
+    if vals.size == 0 or vals.size != len(clusters):
+        raise DataContractError("values e clusters incompatíveis em basin_cluster_bootstrap_ci.")
+
+    unique_clusters = sorted(set(clusters))
+    cluster_indices = [
+        np.array([i for i, c in enumerate(clusters) if c == cl], dtype=np.int64)
+        for cl in unique_clusters
+    ]
+    n_clusters = len(cluster_indices)
+    point = float(np.mean(vals))
+    if n_clusters < 2:
+        return BootstrapCI(point=point, low=point, high=point)
+
+    rng = np.random.default_rng(seed)
+    boot_means = np.empty(n_boot, dtype=np.float64)
+    for b in range(n_boot):
+        sampled = rng.integers(0, n_clusters, size=n_clusters)
+        idx = np.concatenate([cluster_indices[int(c)] for c in sampled])
+        boot_means[b] = float(np.mean(vals[idx]))
+
+    return BootstrapCI(
+        point=point,
+        low=float(np.quantile(boot_means, 0.025)),
+        high=float(np.quantile(boot_means, 0.975)),
+    )

@@ -13,7 +13,7 @@
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
 | **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | ✅ Concluída (V1 RS) | `100%` | `F03 HydroFiLMMonotonicNet` (`autograd 0,00%`, `BSS=+0,076`) + `F04` (`NegBinHurdle 0,710`, `QuantileGBDT 0,820`) + LOS causal |
-| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `85%` | **V1 RS pronta para auditoria final `2025`** (`F05 SimPy`, `Conformal 2023`, `Net Benefit`, `F07 CLI`, `Fig. C1–C5` e `TRIPOD+AI/RECORD` concluídos) |
+| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | ✅ V1.1 RS Concluída | `100%` (V1.1) | **Plano Diretor V1.1 RS concluído** (Fases 1–4: Higiene `G1–G8`, Catraca, Dossiê `.md`/`.pdf`, `F01.1–F06.2`, `HydroFiLM-ENSO`, `BSTS`, `Nowcasting`; `2025` pronto para auditoria final) |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
 | **Etapa 5** | Governança TRIPOD+AI / RECORD, Publicação e Release `v1.0.0` | ⏳ Planejada | `0%` | Checklists completos, reprodutibilidade fim a fim e relatório técnico aberto |
 
@@ -81,7 +81,7 @@
 - [x] **Fase 3 / Task 3.4 (`F04.3`):** implementar `ChainLadderNowcaster` (correção de censura à direita `2025–2026+`) e `CompetingRisksLosEstimator` (CIF alta viva vs. óbito) em `demand/nowcasting.py`
 - [x] **Fase 4 / Task 4.1 (`F06.2`):** implementar `PreShockBstsCounterfactual` (controle estrutural Bayesiano pré-choque com `SIVEP-Gripe`) e `recursive_dynamic_do_intervention` (`do()` recursivo sem contaminação pós-tratamento) em `audit/bsts_counterfactual.py`
 - [x] **Fase 4 / Task 4.2 (`F06.2`):** implementar bateria de rebate contrafactual duplo 2024 e oráculo prospectivo de cenários El Niño (`audit/enso_what_if.py`: `run_dual_counterfactual_rebuttal_2024` + `run_enso_what_if_oracle`)
-- [ ] **Fase 4 / Task 4.3:** executar validação em janelas El Niño (`2015–16`, `2023–24`, `2025–26` com *nowcasting*) e emitir Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/` e `~/Downloads/`)
+- [x] **Fase 4 / Task 4.3:** implementar `basin_cluster_bootstrap_ci` (14 clusters de bacia) e `scripts/run_rs_v1_1_dossier.py`, emitindo o Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/runs/rs_v1_1_final_2024/` e espelhado em `~/Downloads/`) com `2025` preservado intocado
 - [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
 - [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 

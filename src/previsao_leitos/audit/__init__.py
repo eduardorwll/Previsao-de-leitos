@@ -48,6 +48,7 @@ from previsao_leitos.audit.hypothesis_ledger import (
 )
 from previsao_leitos.audit.metrics import (
     BootstrapCI,
+    basin_cluster_bootstrap_ci,
     block_bootstrap_ci,
     brier_skill_score,
     decision_curve_net_benefit,
@@ -94,6 +95,7 @@ __all__ = [
     "RatchetCriteria",
     "RatchetEvaluation",
     "VerificationReportArtifacts",
+    "basin_cluster_bootstrap_ci",
     "block_bootstrap_ci",
     "brier_skill_score",
     "build_verification_report",
