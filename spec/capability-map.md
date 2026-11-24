@@ -1,0 +1,68 @@
+# Mapa de Capacidades (`spec/capability-map.md`) — Fase 0
+
+> **Ponto de Aprovação:** Este documento define os limites modulares, a ordem de construção acíclica e a fronteira entre **V1 (RS Hospitais-Escola)** e **V2 (Escala Nacional — Brasil)**. Cada módulo receberá uma especificação individual `spec/SPEC-<id>.md` após aprovação deste mapa e da seleção de bases de dados ([docs/data-catalog.md](../docs/data-catalog.md)).
+
+---
+
+## 1. Objetivo do Sistema
+
+Prever, com antecedência acionável (*ex-ante*) e incerteza calibrada ($P_{50}/P_{90}/P_{95}$), a **necessidade de leitos hospitalares (clínicos, cirúrgicos e UTI) e de contingência (*surge capacity*) em hospitais-escola** frente a enchentes:
+- **V1 (Escopo Inicial):** Rio Grande do Sul (497 municípios, bacias hidrográficas críticas e rede de hospitais-escola do RS, validado com rigor sobre 2024 e holdout intocado 2025).
+- **V2 (Expansão Posterior):** Brasil inteiro (27 UFs, 5.570 municípios e rede nacional de hospitais universitários/ensino — EBSERH e certificados MEC/MS).
+
+> **Fronteira Clínica:** Sistema de pesquisa e planejamento agregado (*"Not for patient care or live clinical use"*). Zero PII; conformidade LGPD na fronteira de dados.
+
+---
+
+## 2. Módulos e Grafo Acíclico de Dependências (Build Order)
+
+```mermaid
+flowchart TD
+    M1["domain<br/>(Tipos NewType, unidades pint, excecoes)"]
+    M2["ingestion<br/>(Ports & Adapters: BigQuery, Parquet, EO, LGPD)"]
+    M3["geo<br/>(SIRGAS 2000, Ottobacias, SAR/HAND, OSMnx, NetworkX)"]
+    M4["hydrology<br/>(Grade calendario, HydroFiLM RS / HydroTFT BR, calibracao)"]
+    M5["demand<br/>(SIH agg, statsmodels, PyMC hierarquico, LOS survival, PyG)"]
+    M6["readiness<br/>(SimPy filas hospitais-escola, PyMoo Pareto, SHAP, gatilhos)"]
+    M7["audit<br/>(Block-bootstrap CIs, BSS/ECE, Net Benefit, TRIPOD+AI, figuras)"]
+    M8["cli<br/>(Orquestracao fina, logging JSON, run_manifest.json)"]
+
+    M1 --> M2
+    M1 --> M3
+    M2 --> M3
+    M2 --> M4
+    M3 --> M4
+    M2 --> M5
+    M3 --> M5
+    M4 --> M5
+    M5 --> M6
+    M3 --> M6
+    M4 --> M7
+    M5 --> M7
+    M6 --> M7
+    M2 --> M8
+    M4 --> M8
+    M5 --> M8
+    M6 --> M8
+    M7 --> M8
+```
+
+| Ordem | Module ID | Responsabilidade (Módulo Profundo) | Costura / Adaptadores Reais | V1 (RS) | V2 (Brasil) |
+| :-: | :--- | :--- | :--- | :---: | :---: |
+| 1 | `domain` | Tipos de domínio (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), unidades físicas (`pint`), hierarquia de exceções e validação de fronteira. | Nenhuma (in-process puro) | Obrigatório | Mantido |
+| 2 | `ingestion` | Conectores parametrizados (BigQuery `basedosdados`, ANA/MERGE/STAC) + cache atômico por hash + contratos `pandera`/`polars` + agregação LGPD com supressão de pequenas células. | `TabularSourcePort`: `BigQueryAdapter` + `ParquetFixtureAdapter` | Obrigatório (RS) | Escala 27 UFs (`dask`/`polars`) |
+| 3 | `geo` | Geometria métrica (`SIRGAS 2000`), delimitação de *catchments* dos hospitais-escola, grafos dirigidos de bacias (`Ottobacias`) e acessibilidade/cortes viários (`OSMnx` + `NetworkX`), manchas SAR e HAND (`rasterio`/`rioxarray`). | `SpatialCatalogPort`: `StacRasterAdapter` + `LocalGeoFixtureAdapter` | Obrigatório (bacias RS) | Escala nacional (biomas + 27 UFs) |
+| 4 | `hydrology` | Grade diária sem lacunas, API vetorizado, `HydroFiLMMonotonicNet` (RS) / `HydroTFTNet` (BR) em `pytorch-lightning` com monotonicidade estrita, calibração pós-hoc e benchmarks `aeon`/`TimesFM 2.5`. | `FloodForecaster` (`fit`/`predict`/`calibrate`) | `HydroFiLMMonotonicNet` + baselines | `HydroTFTNet` multi-escala (15d–180d) |
+| 5 | `demand` | Modelagem *ex-ante* de internações (`SIH-SUS` + `SINAN`) e tempo de permanência (LOS via `scikit-survival`), baselines `statsmodels`/`scikit-learn` quantil, modelo hierárquico `PyMC` (`Hospital-Escola ⊂ Macrorregião`) e Hetero-GNN (`PyG` na V2). | `DemandForecaster` + `LosSurvivalModel` | `statsmodels` + `scikit-learn` + `PyMC` + `scikit-survival` | + `torch-geometric` Hetero-GNN spillover |
+| 6 | `readiness` | Simulação de filas hospitalares (`SimPy`: emergência/enfermaria/UTI, adiamento de eletivas, *lead time* 24–72h), explicabilidade `SHAP`, análise estruturada de cenários extremos e otimização Pareto (`pymoo` na V2). | `HospitalQueueSimulator` + `SurgeOptimizer` | `SimPy` + `SHAP` + cenários extremos | + `pymoo` (NSGA-II/III) alocação federal |
+| 7 | `audit` | Avaliação estatística rigorosa (block-bootstrap por bacia/episódio, ECE, BSS, MASE, Net Benefit), figuras acessíveis WCAG 2.2, `run_manifest.json` e relatórios TRIPOD+AI / PROBAST+AI / RECORD. | Nenhuma (computação pura sobre resultados) | Auditoria RS 2024 + Holdout 2025 | + CV espacial *Leave-UF/Basin-Out* |
+| 8 | `cli` | Ponto de entrada único (CLI + uso limpo em Colab), configuração por ambiente, logging JSON estruturado (`run_id`, `entry_point`, `git_sha`) e execução reprodutível via `datalad run`. | Composição raiz | Obrigatório | + jobs GPU remotos (`modal`) |
+
+---
+
+## 3. Fora de Escopo na V1 (*Out of Scope — Deferred*)
+
+- API REST/dashboard em tempo real conectado a prontuários ou centrais de regulação ao vivo (proibido pela fronteira clínica de pesquisa).
+- Ingestão de microdados identificáveis de pacientes (PII) ou modelos de triagem individual.
+- Treinamento distribuído multi-GPU e otimização multiobjetivo federal (`pymoo` 27 UFs) — reservados para a V2 após aprovação do Gate 3 (V1 RS validada no holdout 2025).
+- Descontinuação de `previsao_leitos.py` antes que os testes de paridade e cobertura $\ge 80\%$ estejam verdes na Etapa 1.

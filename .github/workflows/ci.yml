@@ -1,0 +1,65 @@
+name: CI — Quality Gates (Fast CPU)
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, Types, Floor & Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dev environment (Python 3.12)
+        run: uv sync --extra dev --frozen
+
+      - name: C-01 Ruff lint
+        run: uv run ruff check src tests scripts
+
+      - name: C-02 Mypy strict types
+        run: uv run mypy src
+
+      - name: C-04 Floor constraints check
+        run: uv run python scripts/check_constraints.py src tests
+
+      - name: C-07 Zero import side-effects check
+        run: uv run python -c "import previsao_leitos"
+
+      - name: C-03 Pytest + coverage gate (>=80%)
+        run: uv run pytest -m "not slow" --cov=src/previsao_leitos --cov-fail-under=80
+
+      - name: C-06 Dependency vulnerability audit
+        run: uv run pip-audit
+
+  secrets:
+    name: C-05 Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks (redacted)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: "true"

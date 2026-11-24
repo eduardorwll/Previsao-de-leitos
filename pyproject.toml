@@ -1,0 +1,114 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "previsao-de-leitos"
+version = "0.1.0"
+description = "Pesquisa aberta para previsão ex-ante de leitos necessários em hospitais-escola sob risco de enchentes (RS -> Brasil)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Equipe Previsao-de-leitos" }]
+dependencies = []
+
+[project.optional-dependencies]
+data = [
+    "polars>=1.20.0",
+    "pyarrow>=18.0.0",
+    "pandera[polars]>=0.22.0",
+    "pydantic>=2.10.0",
+    "google-cloud-bigquery>=3.27.0",
+    "db-dtypes>=1.3.0",
+    "pint>=0.24.4",
+    "uncertainties>=3.2.2",
+]
+ml = [
+    "numpy>=2.1.0",
+    "pandas>=2.2.3",
+    "scikit-learn>=1.6.0",
+    "statsmodels>=0.14.4",
+    "shap>=0.46.0",
+    "matplotlib>=3.10.0",
+    "torch>=2.5.0",
+    "lightning>=2.5.0",
+    "torchmetrics>=1.6.0",
+]
+geo = [
+    "geopandas>=1.0.1",
+    "shapely>=2.0.6",
+    "pyproj>=3.7.0",
+    "rasterio>=1.4.3",
+    "rioxarray>=0.18.0",
+    "xarray>=2025.1.0",
+    "networkx>=3.4.2",
+    "osmnx>=2.0.1",
+    "pystac-client>=0.8.5",
+    "planetary-computer>=1.0.0",
+]
+bayes = [
+    "pymc>=5.20.0",
+    "arviz>=0.20.0",
+]
+survival = [
+    # Nota: scikit-survival upstream é GPL-3.0-or-later (compatível com pesquisa aberta).
+    "scikit-survival>=0.24.0",
+]
+sim = [
+    "simpy>=4.1.1",
+    "pymoo>=0.6.1.3",
+]
+scale = [
+    "dask[dataframe,distributed]>=2025.1.0",
+    "aeon>=1.1.0",
+    "torch-geometric>=2.6.1",
+]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pip-audit>=2.7.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/previsao_leitos"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests", "scripts"]
+extend-exclude = ["legacy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF"]
+ignore = ["S101"]  # assert permitido em testes; validado seletivamente em per-file-ignores
+
+[tool.ruff.lint.per-file-ignores]
+"src/**/*.py" = []
+"tests/**/*.py" = ["S101"]
+"scripts/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_unreachable = true
+disallow_any_generics = true
+files = ["src/previsao_leitos"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --import-mode=importlib"
+markers = [
+    "slow: testes de integração pesada ou treinamento (fora do caminho rápido de PR)",
+    "bigquery: requer credenciais reais do Google BigQuery",
+]
+
+[tool.coverage.run]
+source = ["src/previsao_leitos"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
