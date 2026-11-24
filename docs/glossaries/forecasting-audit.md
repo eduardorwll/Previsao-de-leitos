@@ -19,7 +19,16 @@ Partição temporal ou espacial reservada exclusivamente para a avaliação fina
 Grau de concordância entre as probabilidades previstas e as frequências reais observadas dos eventos, auditado por Erro Esperado de Calibração (ECE), *Brier Skill Score* (BSS) e diagramas de confiabilidade.
 
 ### Resíduo Contrafactual de Choque
-Diferença entre o total observado durante um evento extremo e a trajetória esperada sem o choque. Serve como diagnóstico descritivo retrospectivo, não como prova causal automática nem como previsão prospectiva de demanda.
+Diferença entre o total observado durante um evento extremo e a trajetória contrafactual independente esperada sem o choque ($\Delta^{\text{obs}}_t = y_t - \hat{y}^{(0)}_t$). Serve para auditar a acurácia de excesso e o timing de pico dos modelos preditivos, sempre validado por testes placebo em períodos/regiões sem cheia.
+
+### Contrafactual Intervencionista Estrutural (`do(...)`)
+Avaliação controlada do comportamento do modelo sob perturbação isolada de um mecanismo físico ou assistencial (ex.: anular escoamento de cidades a montante, zerar remanso lagunar ou variar exposição em área aterrada), utilizada para decompor atribuições e verificar coerência física/monotônica.
+
+### Teste Placebo Contrafactual
+Execução do estimador contrafactual e do excesso previsto em períodos ou regiões **não afetadas** por enchente para confirmar ausência de viés espúrio ou falsos alarmes (o intervalo de confiança de 95% do efeito placebo deve conter zero).
+
+### Relatório de Verificação Científica
+Artefato reprodutível gerado automaticamente por execução (`reports/<run_id>/verificacao_cientifica.md` + `run_manifest.json` + figuras `Fig. C1–C5`) reunindo metodologia, ferramentas/versões, inventário de datasets, métricas com *block-bootstrap* 95% CI e gráficos contrafactuais de acurácia.
 
 ### Supressão de Pequenas Células (LGPD)
 Regra de controle estatístico de divulgação que oculta (supressão primária e complementar) contagens agregadas abaixo de um limiar mínimo de pacientes (ex.: $n < 5$) para impedir reidentificação indireta em municípios ou estratos pequenos.

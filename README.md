@@ -13,12 +13,13 @@ Projeto de **pesquisa aberta** voltado à previsão *ex-ante* da **necessidade d
 | **[Mapa de Progresso (Etapas e Features)](docs/PROGRESSO.md)** | Acompanhamento consolidado etapa por etapa e feature por feature com marcação de progresso |
 | **[Feature F00 — Domínio e Fundação](docs/features/00-dominio-e-fundacao.md)** | Tipos validados (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), exceções e qualidade base |
 | **[Feature F01 — Ingestão Segura e LGPD](docs/features/01-ingestao-segura.md)** | Módulo `ingestion` validado em dados reais RS (`2010–2025`): CNES UTI específica + hospitais-escola, SIH semanal (`COALESCE` CID-10) e LGPD |
-| **[Feature F02 — Geo, Hidrologia 100% RS e Tracer Bullet](docs/features/02-geo-hidrologia-rs.md)** | Módulo `geo` concluído: grade calendário 30/30 Regiões RS (`NASA POWER` + `ERA5-Land` + DAG de bacias) e *Tracer Bullet* 2023–2024 ($h=1..4$ sem.) |
+| **[Feature F02 — Geo, Hidrologia 100% RS e Tracer Bullet](docs/features/02-geo-hidrologia-rs.md)** | Módulo `geo` concluído: grade calendário 30/30 Regiões RS (`NASA POWER` + `ERA5-Land` + DAG de bacias + aterros/pôlderes + `W_ref`) e ablação 2024 ($h=1..4$ sem.) |
+| **[Feature F06 — Auditoria Contrafactual e Relatório](docs/features/06-auditoria-contrafactual-e-relatorio.md)** | Especificação V1 (`spec/SPEC-audit-counterfactual-report.md`): controle sintético "sem enchente", validação placebo, 5 gráficos contrafactuais e Relatório de Verificação Científica |
 | **[Guia de Setup do BigQuery](docs/runbooks/setup-bigquery.md)** | Passo a passo para obter `GCP_PROJECT_ID`, autenticar via ADC sem chaves `.json` e testar com custo `0 bytes` |
 | **[Catálogo de Bases de Dados](docs/data-catalog.md)** | 14 fontes oficiais (Saúde, Hidrologia, Observação da Terra, Mobilidade e Demografia) e critérios de seleção |
 | **[Mapa de Capacidades](spec/capability-map.md)** | Arquitetura modular alvo (`domain` → `ingestion` → `geo` → `hydrology` → `demand` → `readiness` → `audit` → `cli`) |
 | **[Glossário de Domínio](GLOSSARY-MAP.md)** | Terminologia canônica dividida em Hidrologia, Capacidade Hospitalar e Previsão/Auditoria |
-| **[Decisões Arquiteturais (ADRs)](docs/adr/)** | Registros das decisões técnicas e científicas centrais (`0001`–`0005`) |
+| **[Decisões Arquiteturais (ADRs)](docs/adr/)** | Registros das decisões técnicas e científicas centrais (`0001`–`0007`: monotonicidade, demanda real, splits, escala, LGPD, aterros/intermunicipal e contrafactual) |
 | **[Padrões de Qualidade](CONSTRAINTS.md)** | Regras mecânicas de lint, tipagem, testes, segurança e privacidade (LGPD) |
 | **[Diário de Desempenho](PERF.md)** & **[Changelog](CHANGELOG.md)** | Medições de performance e histórico de mudanças por versão |
 

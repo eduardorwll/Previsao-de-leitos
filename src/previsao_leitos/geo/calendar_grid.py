@@ -202,6 +202,9 @@ def aggregate_daily_to_iso_weekly(
         aggs.append(pl.col("umidade_solo_m3m3").mean().alias("umidade_solo_sem"))
     if "temp_media_c" in daily_df.columns:
         aggs.append(pl.col("temp_media_c").mean().alias("temp_media_sem_c"))
+    if "vento_sul_ms" in daily_df.columns:
+        aggs.append(pl.col("vento_sul_ms").max().alias("vento_sul_max_sem"))
+        aggs.append(pl.col("vento_sul_ms").mean().alias("vento_sul_media_sem"))
 
     return (
         with_iso.group_by([entity_col, "ano_epi", "semana_epi"])

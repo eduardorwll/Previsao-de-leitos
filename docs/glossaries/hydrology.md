@@ -25,3 +25,15 @@ _Avoid:_ Ocorrência física de enchente (como sinônimo exato).
 
 ### Danos Humanos (Desabrigados vs. Desalojados)
 Contagem oficial de pessoas afetadas registrada em Formulário de Informações do Desastre (FIDE): **desabrigados** necessitam de abrigo público; **desalojados** deixaram suas residências mas permanecem em casas de familiares ou amigos.
+
+### Área Aterrada / Planície Artificialmente Ocupada (Pôlder)
+Porção urbana construída sobre antigas várzeas, banhados ou margens fluviais/lagunares com baixo `HAND` (frequentemente protegida por diques e estações de bombeamento — EBAPs), caracterizada por falha em degrau (*threshold failure*) quando a cota supera a proteção ou falha o bombeamento, seguida de alagamento estagnado prolongado (*ponding*).
+
+### Efeito de Remanso (*Backwater*)
+Represamento da descarga fluvial em zonas estuarinas ou lagunares de baixíssima declividade (ex.: Lago Guaíba ↔ Lagoa dos Patos ↔ Canal São Gonçalo) causado por nível elevado a jusante e/ou empilhamento hídrico induzido por ventos do quadrante Sul/Sudeste (`V10M > 0`).
+
+### Tempo de Trânsito Hidrológico ($\tau_{u \to v}$)
+Intervalo físico (em dias ou semanas) decorrido entre o pico de precipitação/escoamento em um município ou sub-bacia a montante ($u$) e a chegada da onda de cheia a um município ou sub-bacia a jusante ($v$).
+
+### Pressão Hidrológica de Área de Captação (*Catchment Flood Pressure*)
+Exposição hidrológica e de áreas aterradas ponderada pela matriz empírica histórica de referência hospitalar ($W_{\text{ref}}$, `MUNIC_RES → CNES`, congelada em `<= ano - 1`), capturando o transbordamento de demanda assistencial quando cidades vizinhas alagam.

@@ -1,12 +1,33 @@
-"""Grafo dirigido de bacias hidrográficas (DAG montante -> jusante) para o RS."""
+"""Grafo dirigido de bacias hidrográficas (DAG ponderado + tempo de trânsito + remanso)."""
 
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from dataclasses import dataclass
 
 import polars as pl
 
 from previsao_leitos.domain import DataContractError
+from previsao_leitos.geo.calendar_grid import build_complete_iso_week_grid
+
+
+@dataclass(frozen=True)
+class WeightedBasinEdge:
+    """Aresta dirigida montante -> jusante com peso físico de contribuição e tempo de trânsito."""
+
+    src: str
+    dst: str
+    weight: float = 1.0
+    travel_weeks: int = 0
+
+    def __post_init__(self) -> None:
+        if self.weight <= 0.0:
+            raise DataContractError(f"Peso hidrológico deve ser > 0 (recebido {self.weight}).")
+        if self.travel_weeks < 0:
+            raise DataContractError(
+                f"Tempo de trânsito negativo proibido (vazamento futuro): {self.travel_weeks}"
+            )
+
 
 # Topologia hidrográfica simplificada montante -> jusante do Rio Grande do Sul (Ottobacias ANA)
 RS_BASIN_EDGES: tuple[tuple[str, str], ...] = (
@@ -25,38 +46,59 @@ RS_BASIN_EDGES: tuple[tuple[str, str], ...] = (
     ("ibicui", "fronteira_oeste"),
 )
 
+# Arestas ponderadas com contribuição relativa de vazão e defasagem física de trânsito (semanas)
+RS_BASIN_WEIGHTED_EDGES: tuple[WeightedBasinEdge, ...] = (
+    WeightedBasinEdge("serra_taquari_antas", "taquari_antas", weight=1.0, travel_weeks=0),
+    WeightedBasinEdge("planalto_alto_jacui", "jacui_medio", weight=1.0, travel_weeks=0),
+    WeightedBasinEdge("taquari_antas", "jacui_baixo", weight=0.55, travel_weeks=0),
+    WeightedBasinEdge("jacui_medio", "jacui_baixo", weight=0.45, travel_weeks=0),
+    WeightedBasinEdge("jacui_baixo", "guaiba_capital", weight=0.45, travel_weeks=0),
+    WeightedBasinEdge("taquari_antas", "guaiba_capital", weight=0.25, travel_weeks=0),
+    WeightedBasinEdge("cai", "guaiba_capital", weight=0.12, travel_weeks=0),
+    WeightedBasinEdge("sinos", "guaiba_capital", weight=0.12, travel_weeks=0),
+    WeightedBasinEdge("gravatai", "guaiba_capital", weight=0.06, travel_weeks=0),
+    # Trânsito lento pela Lagoa dos Patos (7-14 dias) até Pelotas/Rio Grande
+    WeightedBasinEdge("guaiba_capital", "lagoa_patos_sul", weight=0.75, travel_weeks=1),
+    WeightedBasinEdge("camaqua", "lagoa_patos_sul", weight=0.25, travel_weeks=0),
+    WeightedBasinEdge("alto_uruguai", "medio_uruguai", weight=1.0, travel_weeks=0),
+    WeightedBasinEdge("medio_uruguai", "fronteira_oeste", weight=0.65, travel_weeks=1),
+    WeightedBasinEdge("ibicui", "fronteira_oeste", weight=0.35, travel_weeks=0),
+)
+
+ESTUARINE_BACKWATER_BASINS: frozenset[str] = frozenset({"guaiba_capital", "lagoa_patos_sul"})
+
 # Mapeamento das 30 Regiões de Saúde oficiais do RS (prefixo 01..30) para sua bacia receptora
 RS_REGION_PREFIX_TO_BASIN: dict[str, str] = {
-    "01": "jacui_medio",          # Verdes Campos (Santa Maria)
-    "02": "jacui_medio",          # Entre Rios
-    "03": "fronteira_oeste",      # Fronteira Oeste
-    "04": "litoral_norte",        # Belas Praias
-    "05": "litoral_norte",        # Bons Ventos
-    "06": "sinos",                # Vale do Paranhana e Costa da Serra
-    "07": "sinos",                # Vale dos Sinos
-    "08": "cai",                  # Vale do Caí e Metropolitana
-    "09": "jacui_baixo",          # Carbonífera / Costa Doce
-    "10": "guaiba_capital",       # Capital e Vale do Gravataí (Porto Alegre)
-    "11": "alto_uruguai",         # Sete Povos das Missões
-    "12": "medio_uruguai",        # Portal das Missões
-    "13": "alto_uruguai",         # Diversidade
-    "14": "medio_uruguai",        # Fronteira Noroeste
-    "15": "alto_uruguai",         # Caminho das Águas
-    "16": "alto_uruguai",         # Alto Uruguai Gaúcho
-    "17": "planalto_alto_jacui",  # Planalto (Passo Fundo)
-    "18": "planalto_alto_jacui",  # Araucárias
-    "19": "planalto_alto_jacui",  # Botucaraí
-    "20": "planalto_alto_jacui",  # Rota da Produção
-    "21": "lagoa_patos_sul",      # Sul (Pelotas / Rio Grande)
-    "22": "camaqua",              # Pampa (Bagé)
-    "23": "serra_taquari_antas",  # Caxias e Hortênsias
-    "24": "serra_taquari_antas",  # Campos de Cima da Serra
-    "25": "serra_taquari_antas",  # Vinhedos e Basalto
-    "26": "serra_taquari_antas",  # Uva e Vale
-    "27": "jacui_baixo",          # Jacuí Centro
-    "28": "jacui_baixo",          # Vales e Montanhas (Santa Cruz do Sul)
-    "29": "taquari_antas",        # Vales e Montanhas / Vale do Taquari (Lajeado)
-    "30": "taquari_antas",        # Vale do Taquari
+    "01": "jacui_medio",
+    "02": "jacui_medio",
+    "03": "fronteira_oeste",
+    "04": "litoral_norte",
+    "05": "litoral_norte",
+    "06": "sinos",
+    "07": "sinos",
+    "08": "cai",
+    "09": "jacui_baixo",
+    "10": "guaiba_capital",
+    "11": "alto_uruguai",
+    "12": "medio_uruguai",
+    "13": "alto_uruguai",
+    "14": "medio_uruguai",
+    "15": "alto_uruguai",
+    "16": "alto_uruguai",
+    "17": "planalto_alto_jacui",
+    "18": "planalto_alto_jacui",
+    "19": "planalto_alto_jacui",
+    "20": "planalto_alto_jacui",
+    "21": "lagoa_patos_sul",
+    "22": "camaqua",
+    "23": "serra_taquari_antas",
+    "24": "serra_taquari_antas",
+    "25": "serra_taquari_antas",
+    "26": "serra_taquari_antas",
+    "27": "jacui_baixo",
+    "28": "jacui_baixo",
+    "29": "taquari_antas",
+    "30": "taquari_antas",
 }
 
 
@@ -67,25 +109,65 @@ def map_rs_health_region_to_basin(nome_regiao_saude: str) -> str:
     return RS_REGION_PREFIX_TO_BASIN.get(prefix, "outras_bacias")
 
 
+def compute_estuarine_backwater_index(
+    df: pl.DataFrame,
+    *,
+    basin_col: str = "bacia_id",
+    south_wind_col: str = "vento_sul_ms",
+    storage_col: str = "api_montante_max",
+    output_col: str = "remanso_lagunar_idx",
+    estuarine_basins: frozenset[str] = ESTUARINE_BACKWATER_BASINS,
+) -> pl.DataFrame:
+    """Calcula índice físico de remanso (vento Sul positivo x estoque hídrico) em bacias lagunares.
+
+    Em bacias de cabeceira/planalto ou sob vento Norte (`vento_sul_ms <= 0`), o remanso é 0.0.
+    """
+    estuarine_list = sorted(estuarine_basins)
+    return df.with_columns(
+        pl.when(pl.col(basin_col).is_in(estuarine_list))
+        .then(pl.col(south_wind_col).fill_null(0.0).clip(lower_bound=0.0) * pl.col(storage_col))
+        .otherwise(0.0)
+        .fill_null(0.0)
+        .alias(output_col)
+    )
+
+
 class BasinTopology:
     """Grafo dirigido acíclico (DAG) de bacias hidrográficas montante -> jusante."""
 
-    def __init__(self, edges: tuple[tuple[str, str], ...]) -> None:
+    def __init__(
+        self,
+        edges: tuple[tuple[str, str], ...],
+        weighted_edges: tuple[WeightedBasinEdge, ...] | None = None,
+    ) -> None:
         self._edges = edges
+        self._weighted_edges: tuple[WeightedBasinEdge, ...] = (
+            weighted_edges
+            if weighted_edges is not None
+            else tuple(WeightedBasinEdge(src, dst, 1.0, 0) for src, dst in edges)
+        )
         self._downstream: dict[str, set[str]] = defaultdict(set)
         self._upstream_direct: dict[str, set[str]] = defaultdict(set)
         self._nodes: set[str] = set()
 
-        for src, dst in edges:
-            self._nodes.add(src)
-            self._nodes.add(dst)
-            self._downstream[src].add(dst)
-            self._upstream_direct[dst].add(src)
+        for edge in self._weighted_edges:
+            self._nodes.add(edge.src)
+            self._nodes.add(edge.dst)
+            self._downstream[edge.src].add(edge.dst)
+            self._upstream_direct[edge.dst].add(edge.src)
 
         self._validate_acyclic()
         self._ancestors: dict[str, frozenset[str]] = {
             node: self._compute_ancestors(node) for node in self._nodes
         }
+
+    @classmethod
+    def from_weighted_edges(
+        cls, weighted_edges: tuple[WeightedBasinEdge, ...]
+    ) -> BasinTopology:
+        """Constrói DAG diretamente a partir de arestas ponderadas com tempo de trânsito."""
+        raw_edges = tuple((e.src, e.dst) for e in weighted_edges)
+        return cls(edges=raw_edges, weighted_edges=weighted_edges)
 
     def _validate_acyclic(self) -> None:
         in_degree = {node: len(self._upstream_direct[node]) for node in self._nodes}
@@ -153,4 +235,63 @@ class BasinTopology:
 
         return weekly_df.join(
             upstream_agg, on=[basin_col, "ano_epi", "semana_epi"], how="left"
+        ).with_columns(pl.col(output_col).fill_null(0.0))
+
+    def propagate_weighted_upstream(
+        self,
+        weekly_df: pl.DataFrame,
+        *,
+        basin_col: str = "bacia_id",
+        value_col: str = "chuva_sem_mm",
+        output_col: str = "chuva_montante_pond",
+    ) -> pl.DataFrame:
+        """Propaga sinais a montante usando pesos físicos (`weight`) e trânsito (`travel_weeks`)."""
+        if weekly_df.is_empty() or not self._weighted_edges:
+            return weekly_df.with_columns(pl.lit(0.0).alias(output_col))
+
+        # Agrega primeiro por bacia e garante grade ISO semanal contínua antes de aplicar lag
+        basin_series = weekly_df.group_by([basin_col, "ano_epi", "semana_epi"]).agg(
+            pl.col(value_col).mean().alias("_b_val")
+        )
+        basin_grid = build_complete_iso_week_grid(basin_series, entity_col=basin_col)
+
+        distinct_lags = sorted({e.travel_weeks for e in self._weighted_edges})
+        lag_exprs = [
+            pl.col("_b_val").shift(lag).over(basin_col).alias(f"_lag_{lag}")
+            for lag in distinct_lags
+        ]
+        lagged_basins = basin_grid.with_columns(lag_exprs)
+
+        parts: list[pl.DataFrame] = []
+        for lag in distinct_lags:
+            edges_for_lag = [e for e in self._weighted_edges if e.travel_weeks == lag]
+            edge_df = pl.DataFrame(
+                {
+                    "_src_basin": [e.src for e in edges_for_lag],
+                    "_dst_basin": [e.dst for e in edges_for_lag],
+                    "_w": [e.weight for e in edges_for_lag],
+                }
+            )
+            src_df = lagged_basins.select(
+                [basin_col, "ano_epi", "semana_epi", f"_lag_{lag}"]
+            ).rename({basin_col: "_src_basin", f"_lag_{lag}": "_src_val"})
+            joined = edge_df.join(src_df, on="_src_basin", how="inner").filter(
+                pl.col("_src_val").is_not_null()
+            )
+            parts.append(joined)
+
+        if not parts:
+            return weekly_df.with_columns(pl.lit(0.0).alias(output_col))
+
+        combined = pl.concat(parts)
+        weighted_agg = (
+            combined.group_by(["_dst_basin", "ano_epi", "semana_epi"])
+            .agg(
+                ((pl.col("_src_val") * pl.col("_w")).sum() / pl.col("_w").sum()).alias(output_col)
+            )
+            .rename({"_dst_basin": basin_col})
+        )
+
+        return weekly_df.join(
+            weighted_agg, on=[basin_col, "ano_epi", "semana_epi"], how="left"
         ).with_columns(pl.col(output_col).fill_null(0.0))

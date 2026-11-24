@@ -1,9 +1,13 @@
-"""Módulo geoespacial, grade calendário causal e propagação hidrológica de bacias (F02)."""
+"""Módulo geoespacial e hidrológico 100% RS (grade calendário, bacias, aterros e W_ref)."""
 
 from previsao_leitos.geo.basin_graph import (
+    ESTUARINE_BACKWATER_BASINS,
     RS_BASIN_EDGES,
+    RS_BASIN_WEIGHTED_EDGES,
     RS_REGION_PREFIX_TO_BASIN,
     BasinTopology,
+    WeightedBasinEdge,
+    compute_estuarine_backwater_index,
     map_rs_health_region_to_basin,
 )
 from previsao_leitos.geo.calendar_grid import (
@@ -20,15 +24,26 @@ from previsao_leitos.geo.hydro_sources import (
     OpenMeteoEra5Adapter,
     RegionCentroid,
 )
+from previsao_leitos.geo.landfill_exposure import (
+    RS_POLDER_MUNICIPALITIES,
+    build_causal_landfill_exposure,
+)
 from previsao_leitos.geo.panel_builder import (
     SplitPolicy,
     TracerBulletReport,
     evaluate_distributed_lag_tracer_bullet,
     prepare_causal_weekly_panel,
 )
+from previsao_leitos.geo.referral_graph import (
+    build_causal_referral_matrix,
+    compute_catchment_flood_pressure,
+)
 
 __all__ = [
+    "ESTUARINE_BACKWATER_BASINS",
     "RS_BASIN_EDGES",
+    "RS_BASIN_WEIGHTED_EDGES",
+    "RS_POLDER_MUNICIPALITIES",
     "RS_REGION_PREFIX_TO_BASIN",
     "BasinTopology",
     "HydroFixtureAdapter",
@@ -38,11 +53,16 @@ __all__ = [
     "RegionCentroid",
     "SplitPolicy",
     "TracerBulletReport",
+    "WeightedBasinEdge",
     "aggregate_daily_to_iso_weekly",
+    "build_causal_landfill_exposure",
+    "build_causal_referral_matrix",
     "build_complete_daily_grid",
     "build_complete_iso_week_grid",
     "build_ex_ante_distributed_lags",
     "compute_calendar_hydro_features",
+    "compute_catchment_flood_pressure",
+    "compute_estuarine_backwater_index",
     "evaluate_distributed_lag_tracer_bullet",
     "map_rs_health_region_to_basin",
     "prepare_causal_weekly_panel",

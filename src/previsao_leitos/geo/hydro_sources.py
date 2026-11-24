@@ -259,13 +259,13 @@ class NasaPowerHydroAdapter:
         end_date: date,
     ) -> Path:
         payload = {
-            "source": "nasa_power_v1",
+            "source": "nasa_power_v2",
             "centroids": sorted(
                 [(c.entity_id, round(c.latitude, 4), round(c.longitude, 4)) for c in centroids]
             ),
             "start": start_date.isoformat(),
             "end": end_date.isoformat(),
-            "vars": ["PRECTOTCORR", "GWETTOP", "T2M"],
+            "vars": ["PRECTOTCORR", "GWETTOP", "T2M", "V10M"],
         }
         key = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
         return self._cache_dir / f"nasa_power_daily_{start_date.year}_{end_date.year}_{key}.parquet"
@@ -285,7 +285,7 @@ class NasaPowerHydroAdapter:
     ) -> pl.DataFrame:
         params = urlencode(
             {
-                "parameters": "PRECTOTCORR,GWETTOP,T2M",
+                "parameters": "PRECTOTCORR,GWETTOP,T2M,V10M",
                 "community": "AG",
                 "longitude": f"{centroid.longitude:.4f}",
                 "latitude": f"{centroid.latitude:.4f}",
@@ -307,6 +307,7 @@ class NasaPowerHydroAdapter:
         precip_map: dict[str, object] = param_map.get("PRECTOTCORR", {})
         soil_map: dict[str, object] = param_map.get("GWETTOP", {})
         temp_map: dict[str, object] = param_map.get("T2M", {})
+        wind_v_map: dict[str, object] = param_map.get("V10M", {})
         if not precip_map:
             raise SourceUnavailableError(
                 f"Resposta NASA POWER sem série PRECTOTCORR para {centroid.entity_id!r}."
@@ -321,6 +322,8 @@ class NasaPowerHydroAdapter:
                 "precip_dia_mm": [self._clean_value(precip_map.get(k)) for k in keys],
                 "umidade_solo_m3m3": [self._clean_value(soil_map.get(k)) for k in keys],
                 "temp_media_c": [self._clean_value(temp_map.get(k)) for k in keys],
+                # Componente meridional do vento a 10m (m/s): positivo = vento de Sul (remanso!)
+                "vento_sul_ms": [self._clean_value(wind_v_map.get(k)) for k in keys],
             },
             schema={
                 "entity_id": pl.String,
@@ -328,6 +331,7 @@ class NasaPowerHydroAdapter:
                 "precip_dia_mm": pl.Float64,
                 "umidade_solo_m3m3": pl.Float64,
                 "temp_media_c": pl.Float64,
+                "vento_sul_ms": pl.Float64,
             },
         )
 

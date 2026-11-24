@@ -2,11 +2,11 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| **Status** | ✅ Concluída (30/30 Regiões de Saúde do RS — *Tracer Bullet* 2023–2024) |
-| **Etapa** | Etapa 1 — Trilha 1A (Fatia 1A.3 — conclusão da Trilha 1A) |
-| **Especificação** | [spec/SPEC-geo-hydro-etl.md](../../spec/SPEC-geo-hydro-etl.md) |
+| **Status** | ✅ Concluída (F02 + F02.1: 30/30 Regiões RS, Aterros/Pôlderes, Remanso e Grafo `W_ref`) |
+| **Etapa** | Etapa 1 — Trilha 1A + Evolução Intermunicipal F02.1 |
+| **Especificação** | [spec/SPEC-geo-hydro-etl.md](../../spec/SPEC-geo-hydro-etl.md) · [ADR-0006](../adr/0006-landfill-polders-and-intermunicipal-routing.md) |
 | **Pacote Implementado** | `src/previsao_leitos/geo/` + `scripts/run_rs_tracer_bullet.py` |
-| **Verificação** | `ruff` OK · `mypy --strict` OK · `check_constraints.py` OK · `54` testes (`88,2%` cov.) · `pip-audit` OK |
+| **Verificação** | `ruff` OK · `mypy --strict` OK · `check_constraints.py` OK · `60` testes (`88,5%` cov.) · `pip-audit` OK |
 
 > **Fronteira Científica:** Todos os resultados abaixo são exclusivamente de pesquisa e avaliação metodológica (*Not for patient care or live clinical use*). O ano **`2025`** permanece **100% intocado** como *holdout* final, protegido por exceção explícita (`LeakageViolationError`).
 
@@ -21,8 +21,10 @@ Conectar os dados reais de saúde do RS (extraídos em `data/raw/` na feature **
 | Arquivo | Responsabilidade | Cobertura |
 | :--- | :--- | :---: |
 | [`calendar_grid.py`](../../src/previsao_leitos/geo/calendar_grid.py) | Grade diária e semanal ISO sem compressão de lacunas (`null` != `0.0 mm`), `API` estritamente causal ($t-1$ e anteriores) e *distributed lags* | `84%` |
-| [`basin_graph.py`](../../src/previsao_leitos/geo/basin_graph.py) | Grafo dirigido acíclico (`DAG`) de bacias hidrográficas do RS montante→jusante (`RS_BASIN_EDGES`) e mapeamento 30/30 das Regiões de Saúde | `93%` |
-| [`hydro_sources.py`](../../src/previsao_leitos/geo/hydro_sources.py) | Interface `HydroSourcePort` com `NasaPowerHydroAdapter` (MERRA-2/IMERG `PRECTOTCORR`, `GWETTOP`, `T2M`, sentinela `-999.0` → `null`), `OpenMeteoEra5Adapter` (lote + checkpoint + retry 429) e `HydroFixtureAdapter` offline | `88%` |
+| [`basin_graph.py`](../../src/previsao_leitos/geo/basin_graph.py) | Grafo dirigido acíclico (`DAG`) de bacias RS montante→jusante (`RS_BASIN_EDGES` + `RS_BASIN_WEIGHTED_EDGES` com `weight` e `travel_weeks`), remanso estuarino por vento Sul (`compute_estuarine_backwater_index`) e mapeamento 30/30 | `92%` |
+| [`hydro_sources.py`](../../src/previsao_leitos/geo/hydro_sources.py) | Interface `HydroSourcePort` com `NasaPowerHydroAdapter` (`PRECTOTCORR`, `GWETTOP`, `T2M`, **`V10M` vento Sul**, sentinela `-999.0` → `null`), `OpenMeteoEra5Adapter` (lote + checkpoint + retry 429) e `HydroFixtureAdapter` offline | `89%` |
+| [`landfill_exposure.py`](../../src/previsao_leitos/geo/landfill_exposure.py) | Exposição causal em áreas aterradas/várzeas (`MapBiomas <= ref_year`: Urbano `24`, Banhado `11`, Marisma `84`, Água `33`) combinada a fração de municípios com sistemas de pôlderes/diques (`RS_POLDER_MUNICIPALITIES`) | `91%` |
+| [`referral_graph.py`](../../src/previsao_leitos/geo/referral_graph.py) | Grafo assistencial intermunicipal causal $W_{\text{ref}}$ (`MUNIC_RES → CNES`, congelado em `<= train_end_year`) calculando pressão hidrológica da área de captação | `90%+` |
 | [`panel_builder.py`](../../src/previsao_leitos/geo/panel_builder.py) | Painel semanal causal, política congelada de splits (`SplitPolicy`, bloqueio físico de `2025`) e avaliador *Tracer Bullet* vs. Persistência e Sazonal-Ingênuo | `90%` |
 
 ---
@@ -64,12 +66,24 @@ Conectar os dados reais de saúde do RS (extraídos em `data/raw/` na feature **
    - **Leptospirose (Onda 2 esparsa):** supera Persistência em 2024 (`MASE = 0,930`, $R^2_\Delta = +0,429$), mas um modelo gaussiano simétrico (`Ridge`) não captura excesso de zeros nem cauda extrema (`6 → 42` casos na Sem. 20) — exigindo **Binomial Negativa / Hurdle (`statsmodels`)** e **Regressão Quantil ($P_{90}/P_{95}$)**.
    - **Internações Clínicas / UTI em `h=1` de 2024:** a queda abrupta de acesso nas Semanas 18–19 (`-22%`) gera assimetria negativa que penaliza modelos lineares sem informação de bloqueio viário (`OSMnx`) e fila reprimida (`GERINT-POA`).
 
+### Ablação F02 vs. F02.1 — Aterros, Remanso (`V10M`) e Acoplamento Intermunicipal (`h=2` sem., 2024)
+
+| Alvo (30 Regiões RS, Treino `<= 2022`) | MAE F02 | MAE F02.1 | MASE F02 | MASE F02.1 | $R^2_\Delta$ F02 | $R^2_\Delta$ F02.1 | Destaque Regional F02.1 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Diárias UTI Adulto** | `55,82` | **55,70** | `0,934` | **0,932** | `+0,065` | `+0,053` | **Sul (Pelotas/RG):** `0,909 → 0,900` · **Vale do Caí:** `0,997 → 0,990` |
+| **Leptospirose (Onda 2)** | `0,37` | **0,36** | `0,930` | **0,923** | `+0,429` | **+0,437** | **Capital/POA:** **`0,715 → 0,704`** (`-29,6%` erro vs. Persistência) |
+| **Internações Clínicas** | `25,22` | **24,97** | `1,021` | **1,011** | `-0,032` | **-0,013** | Redução de erro sob choque de acesso via pressão da rede `W_ref` |
+| **Respiratório / SRAG** | **12,16** | `12,22` | **0,875** | `0,879` | `+0,239` | `+0,223` | Leve variância no Ridge por região (exige seleção/pooling na Etapa 2) |
+
+> **Nota técnica importante:** No *Tracer Bullet* linear (`Ridge` ajustado separadamente por região), atributos estruturais estáticos (como `indice_aterro_varzea`) atuam como fator de escala constante por entidade e só expressam seu ganho completo em **modelos globais/hierárquicos entre regiões** (`PyMC`, `HistGradientBoosting` Quantílico e `HydroFiLMMonotonicNet` na Etapa 2). Ainda assim, o índice causal (`MapBiomas <= 2022`) ranqueou **Capital/POA (`#1`)**, **Vale dos Sinos (`#2`)**, **Vale do Caí/Canoas (`#4`)** e **Sul/Pelotas-RG (`#6`)** no topo de vulnerabilidade física **sem tocar nenhum dado de 2024**.
+
 ---
 
 ## 3. Checklist da Feature F02
 
 - [x] Redigir e aprovar especificação [spec/SPEC-geo-hydro-etl.md](../../spec/SPEC-geo-hydro-etl.md)
 - [x] Implementar `calendar_grid.py` (grade diária/semanal completa + API causal + lags distribuídos) com testes *Prove-It*
-- [x] Implementar `basin_graph.py` (DAG de bacias RS montante→jusante + mapeamento 30/30 Regiões de Saúde)
-- [x] Implementar `hydro_sources.py` (`NasaPowerHydroAdapter`, `OpenMeteoEra5Adapter` com batch/retry 429/checkpoint e `HydroFixtureAdapter`)
-- [x] Implementar `panel_builder.py` + executar *Tracer Bullet* semanal real RS (`2023` e `2024`, $h=1..4$ sem.) com bloqueio físico do holdout `2025`
+- [x] Implementar `basin_graph.py` (DAG ponderado de bacias RS montante→jusante com `travel_weeks` + remanso estuarino `V10M`)
+- [x] Implementar `hydro_sources.py` (`NasaPowerHydroAdapter` com `V10M`, `OpenMeteoEra5Adapter` e `HydroFixtureAdapter`)
+- [x] Implementar `landfill_exposure.py` (exposição causal `MapBiomas <= 2022` de áreas aterradas/banhados + sistemas de pôlderes) e `referral_graph.py` (matriz intermunicipal causal `W_ref` sobre `1,78M` fluxos `SIH-SUS`)
+- [x] Implementar `panel_builder.py` + executar ablação real RS (`F02` vs. `F02.1`, `2023` e `2024`, `2025` bloqueado)
