@@ -55,7 +55,7 @@
 - **Trilha 1B — Enriquecimento Físico e Fila Reprimida (Incremental):**
   - [ ] Integrar `GERINT-POA` (demanda solicitada/fila reprimida na Região Metropolitana de Porto Alegre)
   - [ ] Integrar `ERA5-Land` (umidade do solo `swvl1–4` + temperatura) e relevo/inundação (`HAND` + `Sentinel-1 SAR`) + malha viária (`OSMnx`)
-  - [ ] Aposentar `legacy/previsao_leitos_colab.py` em commit dedicado após paridade e cobertura $\ge 80\%$
+  - [x] Aposentar `legacy/previsao_leitos_colab.py` em commit dedicado após paridade modular (`F00–F07`) e cobertura $\ge 80\%$ (`86,8%`)
 
 ### 🔄 Etapa 2 — Pivô Científico RS: Demanda Semanal Multi-Horizonte, LOS e Hidrologia Calibrada
 - [x] Congelar splits temporais (`<=2022` treino, `2023` calibração, `2024` auditoria RS, **`2025` holdout intocado** com bloqueio físico)

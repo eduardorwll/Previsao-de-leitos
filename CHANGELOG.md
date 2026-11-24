@@ -4,6 +4,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 
 ## [Unreleased]
 
+### Removed
+- **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
+
 ### Added
 - **Etapa 3 / Feature F07 (`cli` — Orquestração JSON, Net Benefit e Governança TRIPOD+AI/RECORD):**
   - Implementado `src/previsao_leitos/cli/` (`logging_json.py`, `main.py`) registrado como comando `previsao-leitos` em `pyproject.toml` (`doctor` e `verify-rs` com bloqueio explícito do holdout `2025`).
