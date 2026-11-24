@@ -29,6 +29,13 @@ from previsao_leitos.audit.dossier_compiler import (
     compile_execution_dossier,
     compute_surge_flags,
 )
+from previsao_leitos.audit.enso_what_if import (
+    DEFAULT_ENSO_SCENARIOS,
+    DualRebuttalSummary,
+    EnsoScenarioSpec,
+    run_dual_counterfactual_rebuttal_2024,
+    run_enso_what_if_oracle,
+)
 from previsao_leitos.audit.hypothesis_ledger import (
     ChampionChallengerRatchet,
     HypothesisEntry,
@@ -66,12 +73,15 @@ from previsao_leitos.audit.report_builder import (
 )
 
 __all__ = [
+    "DEFAULT_ENSO_SCENARIOS",
     "BootstrapCI",
     "ChampionChallengerRatchet",
     "CounterfactualAccuracyReport",
     "DataHygieneScorecard",
     "DatasetAuditEntry",
     "DossierArtifacts",
+    "DualRebuttalSummary",
+    "EnsoScenarioSpec",
     "HygieneGateResult",
     "HygieneStatus",
     "HypothesisEntry",
@@ -114,4 +124,6 @@ __all__ = [
     "plot_c6_hygiene_scorecard",
     "plot_c7_ablation_delta",
     "recursive_dynamic_do_intervention",
+    "run_dual_counterfactual_rebuttal_2024",
+    "run_enso_what_if_oracle",
 ]

@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F06.2 (`audit/enso_what_if.py` — Rebate Contrafactual Duplo 2024 e Oráculo El Niño):**
+  - Implementados `EnsoScenarioSpec`, `DEFAULT_ENSO_SCENARIOS`, `run_enso_what_if_oracle` (cenários prospectivos ordenados de intensidade El Niño com garantia monotônica) e `run_dual_counterfactual_rebuttal_2024` (acoplando `BSTS` Pré-Choque com `SIVEP-Gripe` ao `do()` dinâmico recursivo).
 - **Etapa 3 / Feature F06.2 (`audit/bsts_counterfactual.py` — `BSTS` Pré-Choque com `SIVEP-Gripe` e `do()` Recursivo):**
   - Implementado `PreShockBstsCounterfactual` (regressão estrutural Bayesiana pré-choque com tendência, harmônicos e controle viral `SIVEP-Gripe`, eliminando violação de SUTVA por doadores intra-RS contaminados).
   - Implementada `recursive_dynamic_do_intervention` propagando `y_origin_cf` recursivamente sob `do(Clima=Climatologia)` e `do(ENSO=Neutro)`.

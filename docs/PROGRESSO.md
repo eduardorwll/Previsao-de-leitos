@@ -80,7 +80,8 @@
 - [x] **Fase 3 / Task 3.3 (`F04.2`):** implementar `ExtremeValueGpdTail` (`EVT-GPD`), `MondrianEnsoConformalCalibrator` (porte × regime `ENSO`) e `HierarchicalBasinBayesShrinkage` (`Hospital ⊂ Bacia`) em `demand/extreme_uncertainty.py`
 - [x] **Fase 3 / Task 3.4 (`F04.3`):** implementar `ChainLadderNowcaster` (correção de censura à direita `2025–2026+`) e `CompetingRisksLosEstimator` (CIF alta viva vs. óbito) em `demand/nowcasting.py`
 - [x] **Fase 4 / Task 4.1 (`F06.2`):** implementar `PreShockBstsCounterfactual` (controle estrutural Bayesiano pré-choque com `SIVEP-Gripe`) e `recursive_dynamic_do_intervention` (`do()` recursivo sem contaminação pós-tratamento) em `audit/bsts_counterfactual.py`
-- [ ] **Fase 4 / Tasks 4.2–4.3:** executar bateria completa de rebate contrafactual 2024 + validação prospectiva El Niño (`2015–16`, `2023–24`, `2025–26`) emitindo Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/` e `~/Downloads/`)
+- [x] **Fase 4 / Task 4.2 (`F06.2`):** implementar bateria de rebate contrafactual duplo 2024 e oráculo prospectivo de cenários El Niño (`audit/enso_what_if.py`: `run_dual_counterfactual_rebuttal_2024` + `run_enso_what_if_oracle`)
+- [ ] **Fase 4 / Task 4.3:** executar validação em janelas El Niño (`2015–16`, `2023–24`, `2025–26` com *nowcasting*) e emitir Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/` e `~/Downloads/`)
 - [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
 - [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 
