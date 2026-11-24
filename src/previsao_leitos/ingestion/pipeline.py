@@ -161,13 +161,35 @@ def aggregate_regional_weekly_demand(
     seriam apagados se suprimidos em micro-estratos de hospital isolado, garantindo conformidade
     LGPD na tabela regional de divulgação.
     """
-    hosp_map = (
-        hospitals_df.group_by("id_estabelecimento_cnes")
-        .agg(
+    if "ano" in hospitals_df.columns:
+        hosp_yearly = (
+            hospitals_df.with_columns(pl.col("ano").cast(pl.Int32).alias("ano_cnes"))
+            .group_by(["id_estabelecimento_cnes", "ano_cnes"])
+            .agg(
+                pl.col("id_municipio").last().alias("id_municipio"),
+                pl.col("is_hospital_ensino").any().alias("is_hospital_ensino"),
+            )
+            .sort(["ano_cnes", "id_estabelecimento_cnes"])
+        )
+        sih_sorted = sih_df.with_columns(pl.col("ano_epi").cast(pl.Int32)).sort(
+            ["ano_epi", "id_estabelecimento_cnes"]
+        )
+        # Join temporal estritamente causal (ano_cnes <= ano_epi): zero vazamento futuro
+        joined = sih_sorted.join_asof(
+            hosp_yearly,
+            left_on="ano_epi",
+            right_on="ano_cnes",
+            by="id_estabelecimento_cnes",
+            strategy="backward",
+            check_sortedness=False,
+        ).drop("ano_cnes")
+    else:
+        hosp_map = hospitals_df.group_by("id_estabelecimento_cnes").agg(
             pl.col("id_municipio").last().alias("id_municipio"),
             pl.col("is_hospital_ensino").any().alias("is_hospital_ensino"),
         )
-    )
+        joined = sih_df.join(hosp_map, on="id_estabelecimento_cnes", how="left")
+
     reg_cols = ["id_municipio"]
     if "nome_regiao_saude" in ibge_df.columns:
         reg_cols.append("nome_regiao_saude")
@@ -175,9 +197,7 @@ def aggregate_regional_weekly_demand(
     if "nome_regiao_saude" not in reg_map.columns:
         reg_map = reg_map.with_columns(pl.lit("NAO_INFORMADA").alias("nome_regiao_saude"))
 
-    joined = sih_df.join(hosp_map, on="id_estabelecimento_cnes", how="left").join(
-        reg_map, on="id_municipio", how="left"
-    )
+    joined = joined.join(reg_map, on="id_municipio", how="left")
     if only_teaching_hospitals:
         joined = joined.filter(pl.col("is_hospital_ensino").fill_null(False))
 

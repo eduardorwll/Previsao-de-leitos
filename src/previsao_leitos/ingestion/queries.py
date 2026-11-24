@@ -149,6 +149,131 @@ GROUP BY
     semana_epi
 """
 
+_SQL_SIH_ACTIVE_CENSUS = """
+WITH base AS (
+    SELECT
+        id_estabelecimento_cnes,
+        ano AS ano_cmpt,
+        data_internacao,
+        LEAST(
+            GREATEST(
+                COALESCE(
+                    data_saida,
+                    DATE_ADD(
+                        data_internacao,
+                        INTERVAL GREATEST(IFNULL(quantidade_dias_permanencia, 1) - 1, 0) DAY
+                    )
+                ),
+                data_internacao
+            ),
+            DATE_ADD(data_internacao, INTERVAL 180 DAY)
+        ) AS data_fim_efetiva,
+        CASE
+            WHEN tipo_uti IN ('51', '74', '75', '76', '83', '85', '86') THEN 'uti_adulto'
+            WHEN tipo_uti IN ('52', '77', '78', '79') THEN 'uti_pediatrica'
+            WHEN tipo_uti IN ('80', '81', '82') THEN 'uti_neonatal'
+            WHEN especialidade_leito IN ('1', '01') THEN 'cirurgico'
+            WHEN especialidade_leito IN ('2', '02') THEN 'obstetrico'
+            WHEN especialidade_leito IN ('3', '03') THEN 'clinico'
+            WHEN especialidade_leito IN ('7', '07') THEN 'pediatrico'
+            ELSE 'outros'
+        END AS especialidade,
+        CASE
+            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3) = 'A27'
+                THEN 'leptospirose'
+            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
+                BETWEEN 'A00' AND 'A09'
+                OR LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3) = 'B15'
+                THEN 'infecciosas_hidricas'
+            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
+                BETWEEN 'S00' AND 'T98'
+                THEN 'trauma'
+            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
+                BETWEEN 'J00' AND 'J99'
+                THEN 'respiratorio'
+            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
+                BETWEEN 'I00' AND 'I99'
+                OR LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
+                BETWEEN 'N17' AND 'N19'
+                THEN 'cardiovascular_renal'
+            ELSE 'outros'
+        END AS grupo_cid,
+        CASE
+            WHEN carater_internacao IN ('1', '01') THEN 'eletivo'
+            ELSE 'urgencia'
+        END AS carater_atendimento,
+        GREATEST(IFNULL(quantidade_dias_uti_mes, 0), 0) AS diarias_uti_aih
+    FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+    WHERE ano BETWEEN @ano_inicio AND @ano_fim
+      AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
+      AND data_internacao IS NOT NULL
+      AND id_estabelecimento_cnes IS NOT NULL
+),
+expanded AS (
+    SELECT
+        b.id_estabelecimento_cnes,
+        EXTRACT(ISOYEAR FROM dia_ativo) AS ano_epi,
+        EXTRACT(ISOWEEK FROM dia_ativo) AS semana_epi,
+        b.especialidade,
+        b.grupo_cid,
+        b.carater_atendimento,
+        IF(dia_ativo = b.data_internacao, 1, 0) AS is_admissao,
+        1.0 AS paciente_dia,
+        SAFE_DIVIDE(
+            CAST(b.diarias_uti_aih AS FLOAT64),
+            CAST(DATE_DIFF(b.data_fim_efetiva, b.data_internacao, DAY) + 1 AS FLOAT64)
+        ) AS diaria_uti_dia,
+        b.ano_cmpt
+    FROM base AS b,
+    UNNEST(GENERATE_DATE_ARRAY(b.data_internacao, b.data_fim_efetiva)) AS dia_ativo
+)
+SELECT
+    id_estabelecimento_cnes,
+    ano_epi,
+    semana_epi,
+    especialidade,
+    grupo_cid,
+    carater_atendimento,
+    SUM(is_admissao) AS internacoes_iniciadas,
+    SUM(paciente_dia) AS pacientes_dia_ativos,
+    SUM(IFNULL(diaria_uti_dia, 0.0)) AS diarias_uti_ativas,
+    MAX(ano_cmpt) AS ano_cmpt_max
+FROM expanded
+GROUP BY
+    id_estabelecimento_cnes,
+    ano_epi,
+    semana_epi,
+    especialidade,
+    grupo_cid,
+    carater_atendimento
+"""
+
+_SQL_SIH_EXTERNAL_REFERRAL_MATRIX = """
+SELECT
+    SUBSTR(id_municipio_paciente, 1, 6) AS id_municipio_residencia_6d,
+    SUBSTR(id_municipio_estabelecimento, 1, 6) AS id_municipio_estabelecimento_6d,
+    id_estabelecimento_cnes,
+    COUNT(*) AS internacoes_urgencia_total,
+    SUM(GREATEST(IFNULL(quantidade_dias_uti_mes, 0), 0)) AS diarias_uti_total
+FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+WHERE ano BETWEEN @ano_inicio AND @train_end_year
+  AND EXTRACT(ISOYEAR FROM data_internacao) <= @train_end_year
+  AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
+  AND data_internacao IS NOT NULL
+  AND id_estabelecimento_cnes IS NOT NULL
+  AND id_municipio_paciente IS NOT NULL
+  AND SUBSTR(id_municipio_paciente, 1, 6) != SUBSTR(id_municipio_estabelecimento, 1, 6)
+  AND (
+      carater_internacao NOT IN ('1', '01')
+      OR IFNULL(quantidade_dias_uti_mes, 0) > 0
+  )
+GROUP BY
+    id_municipio_residencia_6d,
+    id_municipio_estabelecimento_6d,
+    id_estabelecimento_cnes
+HAVING COUNT(*) >= @min_cell_count
+"""
+
 _SQL_IBGE_MUNICIPIOS = """
 SELECT
     m.id_municipio,
@@ -260,6 +385,62 @@ def build_sih_referral_flows_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: in
             "ano_epi",
             "semana_epi",
             "internacoes",
+        ),
+    )
+
+
+def build_sih_active_census_query(
+    *, uf: CodigoUF, ano_inicio: int, ano_fim: int
+) -> QuerySpec:
+    """Retorna QuerySpec parametrizada de censo ativo semanal SIH-SUS ([DT_INTER..DT_SAIDA])."""
+    return QuerySpec(
+        name="sih_censo_ativo_semanal",
+        sql=_SQL_SIH_ACTIVE_CENSUS,
+        params=(
+            QueryParam("uf_code", "STRING", str(uf)),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_estabelecimento_cnes",
+            "ano_epi",
+            "semana_epi",
+            "especialidade",
+            "grupo_cid",
+            "carater_atendimento",
+            "internacoes_iniciadas",
+            "pacientes_dia_ativos",
+            "diarias_uti_ativas",
+            "ano_cmpt_max",
+        ),
+    )
+
+
+def build_sih_external_referral_matrix_query(
+    *,
+    uf: CodigoUF,
+    ano_inicio: int = 2010,
+    train_end_year: int = 2022,
+    min_cell_count: int = 5,
+) -> QuerySpec:
+    """Retorna QuerySpec da matriz W_ref externa (origem != destino, <= train_end_year)."""
+    return QuerySpec(
+        name="sih_w_ref_externa_treino",
+        sql=_SQL_SIH_EXTERNAL_REFERRAL_MATRIX,
+        params=(
+            QueryParam("uf_code", "STRING", str(uf)),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("train_end_year", "INT64", train_end_year),
+            QueryParam("min_cell_count", "INT64", min_cell_count),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_municipio_residencia_6d",
+            "id_municipio_estabelecimento_6d",
+            "id_estabelecimento_cnes",
+            "internacoes_urgencia_total",
+            "diarias_uti_total",
         ),
     )
 

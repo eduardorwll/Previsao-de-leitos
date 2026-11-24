@@ -24,6 +24,8 @@ from previsao_leitos.ingestion.queries import (
     build_cnes_beds_by_specialty_query,
     build_cnes_teaching_hospitals_query,
     build_ibge_municipios_query,
+    build_sih_active_census_query,
+    build_sih_external_referral_matrix_query,
     build_sih_referral_flows_query,
     build_sih_weekly_demand_query,
 )
@@ -43,6 +45,8 @@ __all__ = [
     "build_cnes_beds_by_specialty_query",
     "build_cnes_teaching_hospitals_query",
     "build_ibge_municipios_query",
+    "build_sih_active_census_query",
+    "build_sih_external_referral_matrix_query",
     "build_sih_referral_flows_query",
     "build_sih_weekly_demand_query",
     "count_suppressed_cells",

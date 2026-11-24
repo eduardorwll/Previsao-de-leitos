@@ -228,3 +228,86 @@ def validate_ibge_municipios_frame(df: pl.DataFrame) -> pl.DataFrame:
         raise DataContractError("Valores negativos em ibge_municipios_rs.populacao.")
 
     return normalized
+
+
+def validate_sih_active_census_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Valida tabela de censo ativo semanal SIH-SUS expandido por [DT_INTER..DT_SAIDA]."""
+    required = (
+        "id_estabelecimento_cnes",
+        "ano_epi",
+        "semana_epi",
+        "especialidade",
+        "grupo_cid",
+        "carater_atendimento",
+        "internacoes_iniciadas",
+        "pacientes_dia_ativos",
+        "diarias_uti_ativas",
+        "ano_cmpt_max",
+    )
+    _require_columns(df, required, "sih_censo_ativo_semanal")
+
+    normalized = df.select(list(required)).with_columns(
+        pl.col("id_estabelecimento_cnes").cast(pl.String).str.strip_chars().str.zfill(7),
+        pl.col("ano_epi").cast(pl.Int32),
+        pl.col("semana_epi").cast(pl.Int8),
+        pl.col("especialidade").cast(pl.String).str.strip_chars().str.to_lowercase(),
+        pl.col("grupo_cid").cast(pl.String).str.strip_chars().str.to_lowercase(),
+        pl.col("carater_atendimento").cast(pl.String).str.strip_chars().str.to_lowercase(),
+        pl.col("internacoes_iniciadas").cast(pl.Int64),
+        pl.col("pacientes_dia_ativos").cast(pl.Float64),
+        pl.col("diarias_uti_ativas").cast(pl.Float64),
+        pl.col("ano_cmpt_max").cast(pl.Int32),
+    )
+    _assert_fixed_digits(normalized, "id_estabelecimento_cnes", 7, "sih_censo_ativo_semanal")
+
+    bad_week = normalized.filter((pl.col("semana_epi") < 1) | (pl.col("semana_epi") > 53))
+    if bad_week.height > 0:
+        raise DataContractError("sih_censo_ativo_semanal.semana_epi fora do intervalo 1..53.")
+
+    for col in ("internacoes_iniciadas", "pacientes_dia_ativos", "diarias_uti_ativas"):
+        if normalized.filter(pl.col(col) < 0).height > 0:
+            raise DataContractError(f"Valores negativos em sih_censo_ativo_semanal.{col}.")
+
+    return normalized
+
+
+def validate_sih_external_referral_matrix_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Valida matriz W_ref externa congelada no treino (origem != destino, sem auto-loop)."""
+    required = (
+        "id_municipio_residencia_6d",
+        "id_municipio_estabelecimento_6d",
+        "id_estabelecimento_cnes",
+        "internacoes_urgencia_total",
+        "diarias_uti_total",
+    )
+    _require_columns(df, required, "sih_w_ref_externa_treino")
+
+    normalized = df.select(list(required)).with_columns(
+        pl.col("id_municipio_residencia_6d").cast(pl.String).str.strip_chars().str.zfill(6),
+        pl.col("id_municipio_estabelecimento_6d").cast(pl.String).str.strip_chars().str.zfill(6),
+        pl.col("id_estabelecimento_cnes").cast(pl.String).str.strip_chars().str.zfill(7),
+        pl.col("internacoes_urgencia_total").cast(pl.Int64),
+        pl.col("diarias_uti_total").cast(pl.Int64),
+    )
+    _assert_fixed_digits(
+        normalized, "id_municipio_residencia_6d", 6, "sih_w_ref_externa_treino"
+    )
+    _assert_fixed_digits(
+        normalized, "id_municipio_estabelecimento_6d", 6, "sih_w_ref_externa_treino"
+    )
+    _assert_fixed_digits(normalized, "id_estabelecimento_cnes", 7, "sih_w_ref_externa_treino")
+
+    self_loops = normalized.filter(
+        pl.col("id_municipio_residencia_6d") == pl.col("id_municipio_estabelecimento_6d")
+    )
+    if self_loops.height > 0:
+        raise DataContractError(
+            f"sih_w_ref_externa_treino contém {self_loops.height} linha(s) de auto-referência "
+            "(origem == destino)."
+        )
+
+    for col in ("internacoes_urgencia_total", "diarias_uti_total"):
+        if normalized.filter(pl.col(col) < 0).height > 0:
+            raise DataContractError(f"Valores negativos em sih_w_ref_externa_treino.{col}.")
+
+    return normalized
