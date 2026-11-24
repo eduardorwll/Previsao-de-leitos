@@ -116,7 +116,7 @@ $$
   - **Coortes de Urgência SUS (Total e UTI) — Formulação Multiplicativa:** Remove cirurgias eletivas (`carater_internacao = 01`) e prevê a variação percentual sobre a base de dezembro do ano anterior
 
 $$
-\text{Base}_{\text{dez}} \times (1 + \hat{p})$).
+\text{Base}_{\text{dez}} \times (1 + \hat{p})).
 $$
 
   - **Coortes de CIDs Sensíveis a Enchentes (Total e UTI) — Formulação Aditiva/100k:** Filtra Leptospirose (`A27`), hídricas (`A00–A09`, `B15`), respiratórias agudas (`J00–J22`, `J45–J46`), pele (`L00–L08`) e traumas/hipotermia (`S00–T98`), **excluindo Dengue (`A90–A92`)** para evitar contaminação pela epidemia de outono de 2024. Por serem séries esparsas (onde dezembro pode ser `0`), prevê o acréscimo aditivo de leitos por 100 mil habitantes sobre a média do ano anterior, evitando o travamento em zero.
