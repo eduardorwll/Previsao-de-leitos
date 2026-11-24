@@ -11,7 +11,7 @@
 | Etapa | Escopo | Status | Progresso | Marco de Saída |
 | :---: | :--- | :---: | :---: | :--- |
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
-| **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `50%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + testes de vazamento zero |
+| **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | ⏳ Planejada | `0%` | Modelo *ex-ante* supera Persistência/Sazonal-Ingênuo + calibração (`BSS > 0`) |
 | **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | ⏳ Planejada | `0%` | **V1 RS validada** no holdout intocado `2025` + plano de gatilhos para hospitais-escola |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
@@ -25,7 +25,7 @@
 | :--- | :--- | :---: | :--- |
 | **F00 — Domínio, Tipos Validados e Qualidade Base (`domain`)** | [00-dominio-e-fundacao.md](features/00-dominio-e-fundacao.md) | ✅ Concluída | Tipos nominais (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), hierarquia única de exceções, pacote Python 3.12 (`uv`), verificador mecânico de qualidade e CI |
 | **F01 — Ingestão Segura e Contratos LGPD (`ingestion`)** | [01-ingestao-segura.md](features/01-ingestao-segura.md) | ✅ Concluída (RS 2010–2025) | BigQuery parametrizado + gRPC Storage, CNES `v2` (44 HUs RS + UTI específica), SIH semanal `v3` (`COALESCE` CID-10 + fluxos), IBGE 497 mun. + 30 Regiões e agregação regional LGPD ($n < 5$) |
-| **F02 — Geoespacial, Bacias e Acessibilidade Viária (`geo`)** | [02-geo-hidrologia-rs.md](features/02-geo-hidrologia-rs.md) | 🔄 Spec pronta | Especificação V1 (`spec/SPEC-geo-hydro-etl.md`): grade calendário 100% RS (`MERGE-CPTEC` + `ANA/Ottobacias` + `S2iD`) e *Tracer Bullet* semanal ($h=1..4$ sem.) |
+| **F02 — Geoespacial, Hidrologia 100% RS e *Tracer Bullet* (`geo`)** | [02-geo-hidrologia-rs.md](features/02-geo-hidrologia-rs.md) | ✅ Concluída (Trilha 1A) | Grade calendário diária/semanal sem compressão de lacunas, DAG de bacias RS montante→jusante (`30/30` Regiões), `NasaPowerHydroAdapter` + `OpenMeteoEra5Adapter`, e *Tracer Bullet* RS 2023–2024 superando Persistência e Sazonal em Diárias UTI Adulto (`MASE 0,89–0,93`) e Respiratório (`MASE 0,80–0,88`) |
 | **F03 — Hidrologia Calibrada (`hydrology`)** | *(a criar na Etapa 2)* | ⏳ Planejada | Grade diária sem lacunas, `HydroFiLMMonotonicNet` (RS) e `HydroTFTNet` (BR) com monotonicidade real e calibração pós-hoc (ECE/BSS) |
 | **F04 — Demanda de Internações e Tempo de Permanência (`demand`)** | *(a criar na Etapa 2)* | ⏳ Planejada | `SIH-SUS` agregado + `SINAN`, baselines `statsmodels`/`scikit-learn` quantil, LOS sob riscos competitivos (`scikit-survival`), modelo hierárquico `PyMC` e Hetero-GNN (`PyG` na V2) |
 | **F05 — Prontidão, Filas Hospitalares e Otimização (`readiness`)** | *(a criar na Etapa 3)* | ⏳ Planejada | Simulador de filas de emergência/enfermaria/UTI (`SimPy`), explicabilidade `SHAP`, cenários de estresse composto e alocação multiobjetivo (`pymoo` na V2) |
@@ -51,7 +51,7 @@
   - [x] Implementar `TabularSourcePort` (`BigQueryAdapter` parametrizado com `dry_run` + `ParquetFixtureAdapter`), cache atômico por hash, contratos `polars` e supressão LGPD primária/complementar ($n < 5$)
   - [x] Executar extração real RS `2010–2025` (`CNES v2` + `SIH semanal v3` + `IBGE 497 mun. / 30 Regiões`) e validar cobertura completa de 2024 e 2025 no BigQuery
   - [x] Especificar contrato do módulo `geo` + ETL hidrológico 100% RS (`spec/SPEC-geo-hydro-etl.md`)
-  - [ ] Implementar ETL hidrológico 100% RS (`MERGE-CPTEC` + `ANA HidroWeb / Ottobacias` + `S2iD FIDE`) em grade calendário completa e rodar *Tracer Bullet* semanal ($h \in \{1,2,3,4\}$ semanas, foco $h=2$ semanas) vs. Persistência com testes *Prove-It*
+  - [x] Implementar módulo `geo` 100% RS (grade calendário completa + API causal + DAG de bacias RS montante→jusante + `NasaPowerHydroAdapter` / `OpenMeteoEra5Adapter`) e rodar *Tracer Bullet* semanal real (`2023` e `2024`, $h \in \{1,2,3,4\}$ semanas, `2025` bloqueado) com testes *Prove-It* (`54` testes, `88,2%` cobertura)
 - **Trilha 1B — Enriquecimento Físico e Fila Reprimida (Incremental):**
   - [ ] Integrar `GERINT-POA` (demanda solicitada/fila reprimida na Região Metropolitana de Porto Alegre)
   - [ ] Integrar `ERA5-Land` (umidade do solo `swvl1–4` + temperatura) e relevo/inundação (`HAND` + `Sentinel-1 SAR`) + malha viária (`OSMnx`)

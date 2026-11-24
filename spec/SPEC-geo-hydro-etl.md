@@ -1,6 +1,6 @@
 # Especificação V1 — Módulo `geo` + ETL Hidrológico RS (`spec/SPEC-geo-hydro-etl.md`)
 
-- **Status:** `proposed` *(aguardando aprovação antes de iniciar a implementação em código)*
+- **Status:** `implemented` *(implementado em TDD, verificado em 30/30 Regiões de Saúde do RS no Tracer Bullet 2023–2024)*
 - **Etapa / Feature:** Etapa 1 — Trilha 1A (Fatia 1A.3: Feature `F02 — Geoespacial, Hidrologia 100% RS e Tracer Bullet Semanal`)
 - **Escopo V1:** 497 municípios e 30 Regiões de Saúde do Rio Grande do Sul (`2010–2025`), com grade calendário diária/semanal sem lacunas e primeiro baseline *ex-ante* com defasagem distribuída ($h \in \{1, 2, 3, 4\}$ semanas, foco em $h = 2$ semanas / D+14).
 
@@ -8,7 +8,7 @@
 
 ## 1. Problema que Esta Especificação Resolve
 
-1. **Fim da exclusão silenciosa de ~90% dos municípios:** no protótipo legado, o *inner join* com estações INMET deixava de fora ~90% dos municípios do RS. Passamos a usar **precipitação em grade contínua (`MERGE-CPTEC`, `0,1°` ≈ 10 km)** cobrindo **497/497 municípios (100% do RS)**.
+1. **Fim da exclusão silenciosa de ~90% dos municípios:** no protótipo legado, o *inner join* com estações INMET deixava de fora ~90% dos municípios do RS. Passamos a usar **fontes contínuas em grade atrás da interface `HydroSourcePort`** (`NasaPowerHydroAdapter` — `PRECTOTCORR`/`GWETTOP`/`T2M` sem chave e `OpenMeteoEra5Adapter` — `ERA5-Land` com cache por entidade e retry HTTP 429) cobrindo **30/30 Regiões de Saúde / 497/497 municípios (100% do RS)** sem lacunas silenciosas.
 2. **Sinal físico real e propagação montante→jusante:** acoplamos **cotas fluviométricas reais (ANA HidroWeb / SGB-SACE)** e o **grafo dirigido de Ottobacias (ANA)**, capturando explicitamente como a chuva nas regiões altas do Norte/Serra escoa para os vales (Taquari-Antas, Jacuí, Caí, Sinos) e o Guaíba/Lagoa dos Patos.
 3. **Integridade de grade calendário e zero vazamento:** substituímos `rolling`/`shift` por índice de linha e `dropna()` destrutivo por **grade calendário completa** (diária → semana epidemiológica ISO), garantindo que nenhum dado futuro vaze para o treino (`<= 2022`), calibração (`2023`) ou holdout intocado (`2025`).
 4. ***Tracer Bullet* Semanal (*Abordagem Mista*):** acoplamos o painel hidrológico semanal 100% RS à demanda real `SIH-SUS` (já em `data/raw/`) para rodar o **primeiro baseline *ex-ante* com Defasagens Distribuídas (*Distributed Lags*, lags $0..4$ semanas)** prevendo internações e diárias por especialidade (**UTI Adulto, UTI Pediátrica, UTI Neonatal, Clínico, Cirúrgico**) e por **Região de Saúde / Hospital-Escola** — comparado explicitamente contra **Persistência** e **Sazonal-Ingênuo**.
