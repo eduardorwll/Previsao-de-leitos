@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 1–3 / Feature F02.3 (`geo/enso_teleconnections.py` — Teleconexões `ENSO / El Niño` e Atlântico Sul):**
+  - Implementado `src/previsao_leitos/geo/enso_teleconnections.py` (`parse_noaa_oni_table`, `classify_enso_regime`, `build_causal_enso_weekly_features`) com projeção mensal → semanal ISO estritamente causal via `publication_lag_days`, `el_nino_intensity >= 0` monotônica e lags `1..24` semanas para `ONI`, `Niño 3.4`, `SOI`, `MEI.v2`, `TSA` e `SALLJ`.
 - **Etapa 1–3 / Feature F02.2 (`geo` — Convolução Multi-Salto, `MapBiomas` Anti-MAUP e Fontes Hidrológicas Finas):**
   - Adicionado `BasinTopology.transitive_upstream_paths()` e modo `multi_hop=True` padrão em `propagate_weighted_upstream` (`geo/basin_graph.py`), propagando 100% das bacias ancestrais (Serra/Taquari/Jacuí até POA e Lagoa dos Patos) com composição exata de pesos e defasagens (`travel_weeks`).
   - Adicionado parâmetro `mun_weights` em `build_causal_landfill_exposure` (`geo/landfill_exposure.py`) para ponderação por população/leitos municipais, eliminando a diluição espacial MAUP.
