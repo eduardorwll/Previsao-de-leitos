@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 1–3 / Feature F01.2 (`ingestion/epidemiology_sources.py` — `GERINT-POA`, `SINAN` 1ºs Sintomas e `SIVEP-Gripe`):**
+  - Implementados `aggregate_gerint_poa_weekly` (demanda solicitada, fila reprimida e tempo de espera P50/P90), `aggregate_sinan_leptospirose_weekly` (agregado por `data_primeiros_sintomas`) e `aggregate_sivep_gripe_weekly` (isolando onda viral de SRAG de inverno), todos com validação de colunas permitidas anti-PII e supressão LGPD ($n < 5$).
 - **Etapa 1–3 / Feature F01.1 (`ingestion` — Saneamento Censo Ativo, `W_ref` Externa Pré-LGPD e `CNES` Temporal):**
   - Adicionada `build_sih_active_census_query` em `ingestion/queries.py` expandindo `[data_internacao, data_saida]` via `GENERATE_DATE_ARRAY` em pacientes-dia ativos semanais, distribuindo todas as diárias UTI reais (independente de `especialidade_leito`) e registrando `ano_cmpt_max` para *nowcasting* de atraso de processamento.
   - Adicionada `build_sih_external_referral_matrix_query` agregando fluxos externos (`origem != destino`, urgência/UTI, `<= 2022`) diretamente no SQL **antes** da supressão LGPD (`HAVING COUNT(*) >= @min_cell_count`), além dos contratos `validate_sih_active_census_frame` e `validate_sih_external_referral_matrix_frame` em `ingestion/schemas.py`.

@@ -2,6 +2,11 @@
 
 from previsao_leitos.ingestion.adapters import BigQueryAdapter, ParquetFixtureAdapter
 from previsao_leitos.ingestion.cache import AtomicParquetCache
+from previsao_leitos.ingestion.epidemiology_sources import (
+    aggregate_gerint_poa_weekly,
+    aggregate_sinan_leptospirose_weekly,
+    aggregate_sivep_gripe_weekly,
+)
 from previsao_leitos.ingestion.lgpd import (
     count_suppressed_cells,
     suppress_small_cells,
@@ -41,7 +46,10 @@ __all__ = [
     "QueryParam",
     "QuerySpec",
     "TabularSourcePort",
+    "aggregate_gerint_poa_weekly",
     "aggregate_regional_weekly_demand",
+    "aggregate_sinan_leptospirose_weekly",
+    "aggregate_sivep_gripe_weekly",
     "build_cnes_beds_by_specialty_query",
     "build_cnes_teaching_hospitals_query",
     "build_ibge_municipios_query",

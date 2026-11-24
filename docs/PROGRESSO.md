@@ -72,7 +72,8 @@
 - [x] Implementar registro versionado de hipóteses e catraca científica *Champion-Challenger* (`src/previsao_leitos/audit/hypothesis_ledger.py`, persistindo `hypothesis_ledger.json` e `ablation_delta.json`)
 - [x] Implementar compilador automático `.md` + `.pdf` (`src/previsao_leitos/audit/dossier_compiler.py`, `Fig. C6–C7`, espelhamento em `~/Downloads/`), corrigir `0.0 >= 0.0`, `ddof=1` e `eval_year` dinâmico na `Fig. C1`
 - [x] **Fase 2 / Task 2.1 (`F01.1`):** implementar censo diário/semanal ativo SIH-SUS (`GENERATE_DATE_ARRAY` + todas as diárias UTI + `ano_cmpt_max`), `W_ref` externa agregada no SQL antes da LGPD (`origem != destino`, `<= 2022`) e `join_asof` temporal causal `CNES` sem vazamento `.any()`
-- [ ] Executar restante da Fase 2 V1.1 (`GERINT-POA`, `SINAN`, `SIVEP-Gripe`, convolução multi-salto `ANA HidroWeb`/`MERGE-CPTEC 0,1°` e teleconexões `ENSO`)
+- [x] **Fase 2 / Task 2.2 (`F01.2`):** implementar conectores e agregadores LGPD de `GERINT-POA` (fila reprimida), `SINAN` Leptospirose (1ºs sintomas `DT_SIN_PRI`) e `SIVEP-Gripe` (SRAG viral) em `ingestion/epidemiology_sources.py`
+- [ ] Executar restante da Fase 2 V1.1 (convolução multi-salto `BasinTopology`, `MapBiomas` ponderado por população/leitos, `ANA HidroWeb`/`MERGE-CPTEC 0,1°` e teleconexões `ENSO`)
 - [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
 - [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 
