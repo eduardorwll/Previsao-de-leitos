@@ -2,6 +2,12 @@
 
 from previsao_leitos.demand.calibration import ConformalFloodCalibrator
 from previsao_leitos.demand.datasets import GlobalDemandSplits, prepare_global_demand_splits
+from previsao_leitos.demand.extreme_uncertainty import (
+    ExtremeValueGpdTail,
+    HierarchicalBasinBayesShrinkage,
+    HierarchicalPosteriorSummary,
+    MondrianEnsoConformalCalibrator,
+)
 from previsao_leitos.demand.los import SpecialtyLosEstimator
 from previsao_leitos.demand.models import (
     QUANTILE_COL_NAMES,
@@ -21,7 +27,11 @@ __all__ = [
     "QUANTILE_LEVELS",
     "ConformalFloodCalibrator",
     "DemandForecaster",
+    "ExtremeValueGpdTail",
     "GlobalDemandSplits",
+    "HierarchicalBasinBayesShrinkage",
+    "HierarchicalPosteriorSummary",
+    "MondrianEnsoConformalCalibrator",
     "NegativeBinomialHurdleForecaster",
     "OrthogonalTwoStageOccupancyForecaster",
     "PooledRidgeDeltaForecaster",

@@ -41,5 +41,5 @@
 - [x] Implementar `los.py` (`SpecialtyLosEstimator` causal + Lei de Little)
 - [x] Validar com testes *Prove-It* e acoplar à auditoria contrafactual `F06` no RS 2024
 - [x] **Evolução `F04.1` (`demand/two_stage.py`):** implementar `OrthogonalTwoStageOccupancyForecaster` (Estágio 1 basal lento sem `y_origin` curto + Estágio 2 de choque ex-ante monotônico em taxa de ocupação relativa `ocupacao / capacidade_cnes` acoplado às saídas OOF da `F03.1`) e roteador automático `select_demand_forecaster` para `NegativeBinomialHurdleForecaster` em contagens esparsas
-- [ ] **Incerteza de Cauda Extrema (`F04.2`):** implementar hierarquia Bayesiana (`Hospital-Escola ⊂ Bacia`), ajuste de cauda `EVT-GPD` e `Mondrian Conformal` estratificado por porte e regime `ENSO`
+- [x] **Incerteza de Cauda Extrema (`F04.2` — `demand/extreme_uncertainty.py`):** implementados `ExtremeValueGpdTail` (ajuste POT *Generalized Pareto* para caudas pesadas sob El Niño), `MondrianEnsoConformalCalibrator` (calibração conformal estratificada por porte regional × regime `ENSO` preservando especificidade no interior) e `HierarchicalBasinBayesShrinkage` (pooling parcial hierárquico `Hospital/Região ⊂ Bacia`)
 - [ ] ***Nowcasting* (`F04.3`):** implementar correção *Chain-Ladder* para censura à direita (`2025–2026+`) e benchmark `TimesFM 2.5`

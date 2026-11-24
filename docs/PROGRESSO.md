@@ -77,7 +77,8 @@
 - [x] **Fase 2 / Task 2.4 (`F02.3`):** implementar conector causal de teleconexões `ENSO / El Niño` (`geo/enso_teleconnections.py`: `ONI`, `Niño 3.4`, `SOI`, `MEI.v2`, `TSA`, `SALLJ` com atraso de publicação e lags `1..24` semanas)
 - [x] **Fase 3 / Task 3.1 (`F03.1`):** evoluir `HydroFiLMMonotonicNet` para **`HydroFiLM-ENSO`** (`enso_dim`, `autograd 0,00%`) e implementar `generate_causal_hydro_oof_predictions` (`hydrology/oof.py`)
 - [x] **Fase 3 / Task 3.2 (`F04.1`):** implementar arquitetura ortogonal em 2 estágios em taxa de ocupação relativa (`demand/two_stage.py`) acoplada às saídas OOF da `F03.1` + roteador automático `NegBinHurdle` para contagens esparsas
-- [ ] **Fase 3 / Tasks 3.3–3.4:** incerteza de cauda extrema (`PyMC`/Hierárquico + `EVT-GPD` + `Mondrian Conformal`) e *Nowcasting* (`Chain-Ladder`)
+- [x] **Fase 3 / Task 3.3 (`F04.2`):** implementar `ExtremeValueGpdTail` (`EVT-GPD`), `MondrianEnsoConformalCalibrator` (porte × regime `ENSO`) e `HierarchicalBasinBayesShrinkage` (`Hospital ⊂ Bacia`) em `demand/extreme_uncertainty.py`
+- [ ] **Fase 3 / Task 3.4 (`F04.3`):** implementar *Nowcasting* de atraso de processamento (`Chain-Ladder / NobBS`) para dados recentes (`2025–2026+`) e contrato LOS competitivo / benchmark `TimesFM 2.5`
 - [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
 - [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 

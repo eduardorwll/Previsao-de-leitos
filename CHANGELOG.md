@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F04.2 (`demand/extreme_uncertainty.py` — `EVT-GPD`, `Mondrian Conformal` e Pooling Hierárquico):**
+  - Implementados `ExtremeValueGpdTail` (*Peaks-Over-Threshold* Pareto Generalizada), `MondrianEnsoConformalCalibrator` (calibração conformal por estrato porte × regime `ENSO` com encolhimento hierárquico, evitando contaminação da escala de POA sobre o interior) e `HierarchicalBasinBayesShrinkage` (*Empirical Bayes* `Hospital/Região ⊂ Bacia`).
 - **Etapa 2–3 / Feature F04.1 (`demand/two_stage.py` — Arquitetura Ortogonal 2 Estágios em Taxa Relativa):**
   - Implementados `OrthogonalTwoStageOccupancyForecaster` (Estágio 1 basal lento sem `y_origin` curto + Estágio 2 de choque ex-ante monotônico em taxa de ocupação por capacidade instalada, `min_samples_leaf=8` para capturar cauda rara de cheia sem atraso de fase) e `select_demand_forecaster` (roteando automaticamente agravos esparsos para `NegativeBinomialHurdleForecaster`).
 - **Etapa 2–3 / Feature F03.1 (`hydrology` — `HydroFiLM-ENSO` e Gerador *Out-of-Fold* Causal):**
