@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Documentação / Diretriz Canônica de Relatórios em PDF (`docs/guides/padrao-relatorio-tecnico-pdf.md`):**
+  - Formalizado o modelo oficial de relatório técnico-científico em PDF do projeto (diagramação editorial HTML5/CSS3 via Chromium headless, proibição de sintaxe Markdown crua, estrutura em Capa + 6 Capítulos, gráficos 300 DPI paleta Okabe-Ito, rastreabilidade de bases, simulações contrafactuais em leitos ocupados/dia e checklist de auditoria pré-entrega).
 - **Etapa 3 / Fechamento V1.1 RS (`audit/metrics.py` + `scripts/run_rs_v1_1_dossier.py` — Cluster-Bootstrap por Bacia e Dossiê Final V1.1):**
   - Adicionado `basin_cluster_bootstrap_ci` em `audit/metrics.py` para intervalos de confiança 95% respeitando dependência espacial nas 14 bacias hidrográficas do RS.
   - Adicionado orquestrador fim a fim `scripts/run_rs_v1_1_dossier.py` integrando `F02.2`, `F02.3`, `F03.1`, `F04.1`, `F04.2`, `F06.1` e `F06.2`, gerando o Dossiê Final V1.1 RS (`relatorio_execucao_completo.md` + `.pdf` em `reports/runs/rs_v1_1_final_2024/` e espelho em `~/Downloads/`) com `2025` intocado.

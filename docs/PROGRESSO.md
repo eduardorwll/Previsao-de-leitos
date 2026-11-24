@@ -82,6 +82,7 @@
 - [x] **Fase 4 / Task 4.1 (`F06.2`):** implementar `PreShockBstsCounterfactual` (controle estrutural Bayesiano pré-choque com `SIVEP-Gripe`) e `recursive_dynamic_do_intervention` (`do()` recursivo sem contaminação pós-tratamento) em `audit/bsts_counterfactual.py`
 - [x] **Fase 4 / Task 4.2 (`F06.2`):** implementar bateria de rebate contrafactual duplo 2024 e oráculo prospectivo de cenários El Niño (`audit/enso_what_if.py`: `run_dual_counterfactual_rebuttal_2024` + `run_enso_what_if_oracle`)
 - [x] **Fase 4 / Task 4.3:** implementar `basin_cluster_bootstrap_ci` (14 clusters de bacia) e `scripts/run_rs_v1_1_dossier.py`, emitindo o Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/runs/rs_v1_1_final_2024/` e espelhado em `~/Downloads/`) com `2025` preservado intocado
+- [x] **Padrão Editorial de Relatório Técnico PDF:** publicar diretriz canônica em [docs/guides/padrao-relatorio-tecnico-pdf.md](guides/padrao-relatorio-tecnico-pdf.md) (HTML5/CSS3 → Chromium headless, zero Markdown cru, 6 capítulos obrigatórios e simulações em leitos ocupados/dia)
 - [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
 - [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 
