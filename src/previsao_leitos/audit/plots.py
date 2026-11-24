@@ -1,0 +1,242 @@
+"""Gráficos contrafactuais acessíveis (paleta Okabe-Ito WCAG 2.2, 300 DPI)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import matplotlib
+import polars as pl
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+# Paleta Okabe-Ito amigável a daltonismo (WCAG 2.2)
+_COLOR_REAL = "#000000"
+_COLOR_CF = "#0072B2"
+_COLOR_MODEL = "#D55E00"
+_COLOR_BAND = "#E69F00"
+_COLOR_POS = "#CC79A7"
+_COLOR_NEG = "#009E73"
+
+
+def plot_c1_counterfactual_trajectory(
+    series_df: pl.DataFrame,
+    *,
+    entity_col: str,
+    target_label: str,
+    output_path: Path,
+    week_range: tuple[int, int] = (10, 35),
+) -> Path:
+    """Fig. C1: Observado vs. Contrafactual Sem Enchente (IC 95%) vs. Previsão Ex-Ante (P10-P90)."""
+    sub = series_df.filter(pl.col("target_semana_epi").is_between(week_range[0], week_range[1]))
+    entities = sorted(sub[entity_col].unique().to_list())[:4]
+    n_panels = max(1, len(entities))
+
+    fig, axes = plt.subplots(n_panels, 1, figsize=(10.5, 3.2 * n_panels), sharex=True)
+    axes_list = [axes] if n_panels == 1 else list(axes)
+
+    for ax, ent in zip(axes_list, entities, strict=True):
+        edf = sub.filter(pl.col(entity_col) == ent).sort("target_semana_epi")
+        wks = edf["target_semana_epi"].to_numpy()
+        ax.fill_between(
+            wks,
+            edf["y_cf_p05"].to_numpy(),
+            edf["y_cf_p95"].to_numpy(),
+            color=_COLOR_CF,
+            alpha=0.14,
+            label="Contrafactual Sem Enchente (IC 95%)",
+        )
+        ax.plot(
+            wks,
+            edf["y_cf_no_flood"].to_numpy(),
+            color=_COLOR_CF,
+            linestyle="--",
+            linewidth=1.8,
+            label="Contrafactual Sem Enchente (Média)",
+        )
+        ax.fill_between(
+            wks,
+            edf["pred_p10"].to_numpy(),
+            edf["pred_p90"].to_numpy(),
+            color=_COLOR_BAND,
+            alpha=0.22,
+            label="Previsão Ex-Ante (Banda P10-P90)",
+        )
+        ax.plot(
+            wks,
+            edf["pred_p50"].to_numpy(),
+            color=_COLOR_MODEL,
+            linewidth=2.0,
+            label="Previsão Ex-Ante (P50)",
+        )
+        ax.plot(
+            wks,
+            edf["target_y"].to_numpy(),
+            color=_COLOR_REAL,
+            linewidth=2.2,
+            marker="o",
+            markersize=3.2,
+            label="Real Observado (SIH-SUS)",
+        )
+        ax.axvspan(18, 22, color="#999999", alpha=0.12)
+        ax.set_title(f"{ent} — {target_label}", fontsize=10.5, fontweight="bold")
+        ax.set_ylabel("Volume Semanal")
+        ax.grid(alpha=0.25)
+
+    axes_list[0].legend(loc="upper right", fontsize=8, ncol=2)
+    axes_list[-1].set_xlabel("Semana Epidemiológica ISO (2024)")
+    fig.suptitle(
+        f"Fig. C1 — Trajetória Observada vs. Contrafactual Sem Enchente ({target_label})",
+        fontsize=12,
+        fontweight="bold",
+        y=0.995,
+    )
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c2_shock_excess_accuracy(
+    series_df: pl.DataFrame,
+    *,
+    target_label: str,
+    output_path: Path,
+    shock_weeks: tuple[int, int] = (14, 32),
+) -> Path:
+    """Fig. C2: Excesso Real Observado vs. Excesso Previsto Ex-Ante (timing Onda 1 / Onda 2)."""
+    agg = (
+        series_df.filter(pl.col("target_semana_epi").is_between(shock_weeks[0], shock_weeks[1]))
+        .group_by("target_semana_epi")
+        .agg(
+            pl.col("excess_obs").mean().alias("excesso_obs"),
+            pl.col("excess_pred").mean().alias("excesso_pred"),
+        )
+        .sort("target_semana_epi")
+    )
+    wks = agg["target_semana_epi"].to_numpy()
+    obs = agg["excesso_obs"].to_numpy()
+    pred = agg["excesso_pred"].to_numpy()
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.4))
+    ax.axhline(0.0, color="#555555", linewidth=1.0, linestyle=":")
+    ax.bar(
+        wks - 0.18,
+        obs,
+        width=0.35,
+        color=_COLOR_REAL,
+        alpha=0.80,
+        label="Excesso Real Observado (Real - Contrafactual)",
+    )
+    ax.bar(
+        wks + 0.18,
+        pred,
+        width=0.35,
+        color=_COLOR_MODEL,
+        alpha=0.85,
+        label="Excesso Previsto Ex-Ante (Real - Climatologia P50)",
+    )
+    ax.axvspan(17.5, 22.5, color="#999999", alpha=0.14, label="Pico Hidro + Onda 2 (Sem. 18-22)")
+    ax.set_title(
+        f"Fig. C2 — Acurácia de Excesso na Janela de Choque ({target_label})",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Semana Epidemiológica ISO")
+    ax.set_ylabel("Excesso Semanal Médio nas Regiões Atingidas")
+    ax.legend(fontsize=8.5)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c3_placebo_validation(
+    placebo_df: pl.DataFrame,
+    *,
+    target_label: str,
+    output_path: Path,
+) -> Path:
+    """Fig. C3: Validação Placebo em semanas sem enchente (auditoria contra falsos alarmes)."""
+    fig, ax = plt.subplots(figsize=(8.8, 4.0))
+    if not placebo_df.is_empty():
+        p_obs = placebo_df["excess_obs"].to_numpy()
+        p_pred = placebo_df["excess_pred"].to_numpy()
+        ax.hist(
+            p_obs,
+            bins=15,
+            alpha=0.55,
+            color=_COLOR_CF,
+            label="Resíduo Contrafactual Placebo (Real - Sem Enchente)",
+        )
+        ax.hist(
+            p_pred,
+            bins=15,
+            alpha=0.60,
+            color=_COLOR_MODEL,
+            label="Excesso Previsto Placebo pelo Modelo",
+        )
+    ax.axvline(0.0, color=_COLOR_REAL, linestyle="--", linewidth=1.6, label="Zero Esperado")
+    ax.set_title(
+        f"Fig. C3 — Validação Placebo em Períodos Sem Enchente ({target_label})",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+    ax.set_xlabel("Desvio / Excesso Estimado em Semanas Sem Cheia")
+    ax.set_ylabel("Frequência (Regiões x Semanas)")
+    ax.legend(fontsize=8.5)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c4_intermunicipal_landfill_waterfall(
+    decomposition_df: pl.DataFrame,
+    *,
+    target_label: str,
+    output_path: Path,
+) -> Path:
+    """Fig. C4: Decomposição waterfall (local -> montante -> remanso/aterro -> W_ref)."""
+    labels = decomposition_df["etapa"].to_list()
+    deltas = decomposition_df["contribuicao_delta"].to_list()
+    levels = decomposition_df["nivel_medio"].to_list()
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.4))
+    colors = [
+        _COLOR_CF if i == 0 else (_COLOR_POS if d >= 0.0 else _COLOR_NEG)
+        for i, d in enumerate(deltas)
+    ]
+    vals = [levels[0], *deltas[1:]]
+    bottoms = [0.0]
+    running = levels[0]
+    for d in deltas[1:]:
+        bottoms.append(running if d >= 0.0 else running + d)
+        running += d
+
+    x = list(range(len(labels)))
+    ax.bar(x, [abs(v) for v in vals], bottom=bottoms, color=colors, width=0.55, edgecolor="#222")
+    for idx, (b, v) in enumerate(zip(bottoms, vals, strict=True)):
+        txt = f"{v:.1f}" if idx == 0 else f"{v:+.2f}"
+        ax.text(idx, b + abs(v) + 0.02 * max(levels), txt, ha="center", va="bottom", fontsize=9)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=15, ha="right")
+    ax.margins(y=0.14)
+    ax.set_ylabel("Previsão Média P50 / Contribuição Incremental")
+    ax.set_title(
+        f"Fig. C4 — Decomposição Contrafactual Intermunicipal e Áreas Aterradas ({target_label})",
+        fontsize=11,
+        fontweight="bold",
+    )
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path

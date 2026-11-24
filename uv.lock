@@ -1939,6 +1939,13 @@ sim = [
     { name = "pymoo" },
     { name = "simpy" },
 ]
+stats = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "statsmodels" },
+]
 survival = [
     { name = "scikit-survival" },
 ]
@@ -1954,9 +1961,11 @@ requires-dist = [
     { name = "google-cloud-bigquery-storage", marker = "extra == 'data'", specifier = ">=2.27.0" },
     { name = "lightning", marker = "extra == 'ml'", specifier = ">=2.5.0" },
     { name = "matplotlib", marker = "extra == 'ml'", specifier = ">=3.10.0" },
+    { name = "matplotlib", marker = "extra == 'stats'", specifier = ">=3.10.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
     { name = "networkx", marker = "extra == 'geo'", specifier = ">=3.4.2" },
     { name = "numpy", marker = "extra == 'ml'", specifier = ">=2.1.0" },
+    { name = "numpy", marker = "extra == 'stats'", specifier = ">=2.1.0" },
     { name = "osmnx", marker = "extra == 'geo'", specifier = ">=2.0.1" },
     { name = "pandas", marker = "extra == 'ml'", specifier = ">=2.2.3" },
     { name = "pandera", extras = ["polars"], marker = "extra == 'data'", specifier = ">=0.22.0" },
@@ -1976,18 +1985,21 @@ requires-dist = [
     { name = "rioxarray", marker = "extra == 'geo'", specifier = ">=0.18.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
     { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.6.0" },
+    { name = "scikit-learn", marker = "extra == 'stats'", specifier = ">=1.6.0" },
     { name = "scikit-survival", marker = "extra == 'survival'", specifier = ">=0.24.0" },
+    { name = "scipy", marker = "extra == 'stats'", specifier = ">=1.14.0" },
     { name = "shap", marker = "extra == 'ml'", specifier = ">=0.46.0" },
     { name = "shapely", marker = "extra == 'geo'", specifier = ">=2.0.6" },
     { name = "simpy", marker = "extra == 'sim'", specifier = ">=4.1.1" },
     { name = "statsmodels", marker = "extra == 'ml'", specifier = ">=0.14.4" },
+    { name = "statsmodels", marker = "extra == 'stats'", specifier = ">=0.14.4" },
     { name = "torch", marker = "extra == 'ml'", specifier = ">=2.5.0" },
     { name = "torch-geometric", marker = "extra == 'scale'", specifier = ">=2.6.1" },
     { name = "torchmetrics", marker = "extra == 'ml'", specifier = ">=1.6.0" },
     { name = "uncertainties", marker = "extra == 'data'", specifier = ">=3.2.2" },
     { name = "xarray", marker = "extra == 'geo'", specifier = ">=2025.1.0" },
 ]
-provides-extras = ["data", "ml", "geo", "bayes", "survival", "sim", "scale", "dev"]
+provides-extras = ["data", "stats", "ml", "geo", "bayes", "survival", "sim", "scale", "dev"]
 
 [[package]]
 name = "propcache"

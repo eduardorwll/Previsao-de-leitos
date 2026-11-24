@@ -37,3 +37,4 @@ build/
 
 # Artefatos locais de execução
 artifacts/
+reports/

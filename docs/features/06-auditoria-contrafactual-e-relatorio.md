@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| **Status** | ⏳ Especificação pronta (`spec/SPEC-audit-counterfactual-report.md`) |
-| **Etapa** | Etapa 3 (núcleo antecipado acoplado à Etapa 2 para auditar `F04`) |
+| **Status** | ✅ Núcleo V1 Concluído (Controle Sintético, Placebo, `Fig. C1–C4` e Relatório de Verificação; falta apenas `Fig. C5 SimPy` na Etapa 3) |
+| **Etapa** | Etapa 2–3 (F06 integrada à validação da F04) |
 | **Especificação** | [spec/SPEC-audit-counterfactual-report.md](../../spec/SPEC-audit-counterfactual-report.md) · [ADR-0007](../adr/0007-counterfactual-analysis-and-verification-report.md) |
-| **Pacote Alvo** | `src/previsao_leitos/audit/` |
+| **Pacote Implementado** | `src/previsao_leitos/audit/` (`metrics.py`, `counterfactual.py`, `plots.py`, `report_builder.py`) |
 
 ---
 
@@ -23,7 +23,8 @@ Garantir que toda verificação dos modelos produza um **Relatório Final de Ver
 
 - [x] Formalizar estratégia causal e de relatório em [ADR-0007](../adr/0007-counterfactual-analysis-and-verification-report.md)
 - [x] Redigir especificação [spec/SPEC-audit-counterfactual-report.md](../../spec/SPEC-audit-counterfactual-report.md)
-- [ ] Implementar `metrics.py` (MAE, MASE, Pinball Loss $P_{50}/P_{90}/P_{95}$, ECE/BSS, *block-bootstrap* 95% CI, Net Benefit)
-- [ ] Implementar `counterfactual.py` (controle sintético "sem enchente", testes placebo, acurácia de excesso/timing e decomposição `do()` intermunicipal + aterros/remanso)
-- [ ] Implementar `plots.py` (5 gráficos contrafactuais `Fig. C1–C5` em paleta *Okabe-Ito* WCAG 2.2, 300 DPI)
-- [ ] Implementar `report_builder.py` (gerador automático de `reports/<run_id>/verificacao_cientifica.md` + `run_manifest.json`) com testes *Prove-It*
+- [x] Implementar `metrics.py` (MAE, MASE, Pinball Loss $P_{50}/P_{90}/P_{95}$, Cobertura, *block-bootstrap* 95% CI)
+- [x] Implementar `counterfactual.py` (`NoFloodSyntheticControl`, validação placebo, acurácia de excesso/timing e decomposição `do()` intermunicipal + aterros/remanso)
+- [x] Implementar `plots.py` (gráficos contrafactuais `Fig. C1–C4` em paleta *Okabe-Ito* WCAG 2.2, 300 DPI)
+- [x] Implementar `report_builder.py` (gerador automático de `reports/<run_id>/verificacao_cientifica.md` + `run_manifest.json`) com testes *Prove-It* e executar sobre RS 2024
+- [ ] Acoplar `Fig. C5` (curva contrafactual de filas `SimPy` com acionamento `h=2` vs. `h=0`) e calibrar cobertura de choque ($34\% \to \ge 80\%$) na Etapa 3 (`PyMC` / conformal em `2023`)

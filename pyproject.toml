@@ -24,6 +24,13 @@ data = [
     "pint>=0.24.4",
     "uncertainties>=3.2.2",
 ]
+stats = [
+    "numpy>=2.1.0",
+    "scipy>=1.14.0",
+    "scikit-learn>=1.6.0",
+    "statsmodels>=0.14.4",
+    "matplotlib>=3.10.0",
+]
 ml = [
     "numpy>=2.1.0",
     "pandas>=2.2.3",
@@ -97,6 +104,10 @@ warn_unused_configs = true
 warn_unreachable = true
 disallow_any_generics = true
 files = ["src/previsao_leitos"]
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "statsmodels.*", "scipy.*", "matplotlib.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
