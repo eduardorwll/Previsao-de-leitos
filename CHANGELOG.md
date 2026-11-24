@@ -8,6 +8,10 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 2 / Feature F03 (`hydrology` — `HydroFiLMMonotonicNet` em PyTorch Lightning CPU):**
+  - Implementado `src/previsao_leitos/hydrology/` (`dataset.py` com `IndexedHydroSequenceDataset` 2D sem cruzar lacunas ISO nem vazar features monotônicas no ramo irrestrito; `model.py` com `HydroFiLMMonotonicNet` + `HydroLightningModule` aplicando `F.softplus` a ambas as cabeças `event_logits` e `severity_pred`; `calibration.py` com `TemperatureScaler`).
+  - Adicionado extra leve `[hydro]` (`torch` CPU-only via índice `pytorch-cpu` + `lightning`) em `pyproject.toml` e CI.
+  - Validado no RS (`Treino <= 2022 | Cal 2023 | Audit 2024`, `20,6s` CPU, `2025` intocado): **`ROC-AUC = 0,7199`**, **`ECE = 0,0521`**, **`BSS = +0,0756`**, auditoria `torch.autograd.grad` aprovada com **`0,00%` de violações** (`75` testes passando, `87,2%` cobertura).
 - **Etapa 3 / Feature F07 (`cli` — Orquestração JSON, Net Benefit e Governança TRIPOD+AI/RECORD):**
   - Implementado `src/previsao_leitos/cli/` (`logging_json.py`, `main.py`) registrado como comando `previsao-leitos` em `pyproject.toml` (`doctor` e `verify-rs` com bloqueio explícito do holdout `2025`).
   - Adicionados `decision_curve_net_benefit` (Vickers & Elkin), `expected_calibration_error` (`ECE`), `brier_skill_score` (`BSS`) e `estimate_surge_probability_from_quantiles` em `audit/metrics.py`, além da **Seção 6 (TRIPOD+AI / PROBAST+AI / RECORD)** em `audit/report_builder.py`.

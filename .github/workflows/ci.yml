@@ -27,8 +27,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync dev, data, stats and sim environment (Python 3.12)
-        run: uv sync --extra dev --extra data --extra stats --extra sim --frozen
+      - name: Sync dev, data, stats, sim and hydro (CPU) environment (Python 3.12)
+        run: uv sync --extra dev --extra data --extra stats --extra sim --extra hydro --frozen
 
       - name: C-01 Ruff lint
         run: uv run ruff check src tests scripts

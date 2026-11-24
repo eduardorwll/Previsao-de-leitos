@@ -12,7 +12,7 @@
 | :---: | :--- | :---: | :---: | :--- |
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
 | **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
-| **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | 🔄 Em andamento | `65%` | Modelo *ex-ante* supera Persistência/Sazonal-Ingênuo (`F04` concluída + auditoria contrafactual `F06` ativa) + `HydroFiLMMonotonicNet` (`F03`) |
+| **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | ✅ Concluída (V1 RS) | `100%` | `F03 HydroFiLMMonotonicNet` (`autograd 0,00%`, `BSS=+0,076`) + `F04` (`NegBinHurdle 0,710`, `QuantileGBDT 0,820`) + LOS causal |
 | **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `85%` | **V1 RS pronta para auditoria final `2025`** (`F05 SimPy`, `Conformal 2023`, `Net Benefit`, `F07 CLI`, `Fig. C1–C5` e `TRIPOD+AI/RECORD` concluídos) |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
 | **Etapa 5** | Governança TRIPOD+AI / RECORD, Publicação e Release `v1.0.0` | ⏳ Planejada | `0%` | Checklists completos, reprodutibilidade fim a fim e relatório técnico aberto |
@@ -26,7 +26,7 @@
 | **F00 — Domínio, Tipos Validados e Qualidade Base (`domain`)** | [00-dominio-e-fundacao.md](features/00-dominio-e-fundacao.md) | ✅ Concluída | Tipos nominais (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), hierarquia única de exceções, pacote Python 3.12 (`uv`), verificador mecânico de qualidade e CI |
 | **F01 — Ingestão Segura e Contratos LGPD (`ingestion`)** | [01-ingestao-segura.md](features/01-ingestao-segura.md) | ✅ Concluída (RS 2010–2025) | BigQuery parametrizado + gRPC Storage, CNES `v2` (44 HUs RS + UTI específica), SIH semanal `v3` (`COALESCE` CID-10 + fluxos), IBGE 497 mun. + 30 Regiões e agregação regional LGPD ($n < 5$) |
 | **F02 — Geoespacial, Hidrologia 100% RS, Aterros e Intermunicipal (`geo`)** | [02-geo-hidrologia-rs.md](features/02-geo-hidrologia-rs.md) | ✅ Concluída (F02 + F02.1) | Grade calendário sem lacunas, DAG ponderado com tempo de trânsito e remanso (`V10M`), exposição causal de áreas aterradas/pôlderes (`MapBiomas <= 2022`), grafo assistencial `W_ref` (`1,78M` fluxos SIH) e ablação RS 2024 (`Leptospirose POA MASE 0,704`; `UTI Sul 0,900`) |
-| **F03 — Hidrologia Calibrada (`hydrology`)** | *(a criar na Etapa 2)* | ⏳ Planejada | Grade diária sem lacunas, `HydroFiLMMonotonicNet` (RS) e `HydroTFTNet` (BR) com monotonicidade real e calibração pós-hoc (ECE/BSS) |
+| **F03 — Hidrologia Calibrada (`hydrology`)** | [03-hidrologia-calibrada-film.md](features/03-hidrologia-calibrada-film.md) | ✅ Concluída (V1 RS) | `IndexedHydroSequenceDataset` (sem cruzar lacunas), `HydroFiLMMonotonicNet` em PyTorch Lightning (`ROC-AUC=0,720`, `ECE=0,052`, `BSS=+0,076`, monotonicidade `autograd 0,00%`) e `TemperatureScaler` |
 | **F04 — Demanda de Internações e Tempo de Permanência (`demand`)** | [04-demanda-e-los.md](features/04-demanda-e-los.md) | ✅ Concluída (V1 RS) | Modelos globais nas 30 Regiões RS (`QuantileGBDT` monotônico exato `0,00%` viol., `NegBinHurdle` para Onda 2 Leptospirose `MASE 0,710`, `PooledRidge` UTI `MASE 0,817`) + `SpecialtyLosEstimator` causal (`<= 2022`) |
 | **F05 — Prontidão, Filas Hospitalares e Gatilhos (`readiness`)** | [05-prontidao-e-filas-simpy.md](features/05-prontidao-e-filas-simpy.md) | ✅ Concluída (V1 RS) | `ConformalFloodCalibrator` (`2023`, `0,00%` viol.), simulador de eventos discretos `SimPy` (estresse pôlder `15%`, redução de **`-36,8%`** no pico de fila e **`16`** dias de sobrecarga evitados em POA), gatilhos observáveis e `Fig. C5` |
 | **F06 — Auditoria Estatística, Análise Contrafactual e Relatório (`audit`)** | [06-auditoria-contrafactual-e-relatorio.md](features/06-auditoria-contrafactual-e-relatorio.md) | ✅ Concluída (`C1–C5`) | Controle sintético "sem enchente", validação placebo, decomposição `do()` intermunicipal/aterros, *block-bootstrap* 95% CI, **todas as 5 figuras (`Fig. C1–C5`)** e Relatório de Verificação (`verificacao_cientifica.md` + `run_manifest.json`) |
@@ -57,12 +57,12 @@
   - [ ] Integrar `ERA5-Land` (umidade do solo `swvl1–4` + temperatura) e relevo/inundação (`HAND` + `Sentinel-1 SAR`) + malha viária (`OSMnx`)
   - [x] Aposentar `legacy/previsao_leitos_colab.py` em commit dedicado após paridade modular (`F00–F07`) e cobertura $\ge 80\%$ (`86,8%`)
 
-### 🔄 Etapa 2 — Pivô Científico RS: Demanda Semanal Multi-Horizonte, LOS e Hidrologia Calibrada
+### ✅ Etapa 2 — Pivô Científico RS: Demanda Semanal Multi-Horizonte, LOS e Hidrologia Calibrada
 - [x] Congelar splits temporais (`<=2022` treino, `2023` calibração, `2024` auditoria RS, **`2025` holdout intocado** com bloqueio físico)
 - [x] Implementar Feature **F04 (`demand`)**: `QuantileGBDTForecaster` monotônico exato (`0,00%` viol.), `NegativeBinomialHurdleForecaster` (`statsmodels` GLM, `MASE 0,710` em Leptospirose Onda 2), `PooledRidgeDeltaForecaster` (`MASE 0,817` em Diárias UTI Adulto) e `SpecialtyLosEstimator` causal (`<= 2022`)
 - [x] Acoplar análise contrafactual estruturada e geração de relatório (`F06`: `NoFloodSyntheticControl`, placebo, decomposição `do()` e `Fig. C1–C4`) sobre RS `2024`
-- [ ] Implementar `HydroFiLMMonotonicNet` em PyTorch Lightning (`F03`) sem impermeabilidade no ramo irrestrito e calibração pós-hoc (`ECE`, `BSS`)
-- [ ] Evoluir LOS para riscos competitivos (`scikit-survival`: alta, UTI, transferência, óbito) e benchmarks `aeon` MiniRocket / `TimesFM 2.5`
+- [x] Implementar Feature **F03 (`hydrology`)**: `HydroFiLMMonotonicNet` em PyTorch Lightning (`20,6s` CPU, `ROC-AUC=0,720`, `ECE=0,052`, `BSS=+0,076`, monotonicidade exata via `torch.autograd.grad` em ambas as cabeças) + `TemperatureScaler`
+- [ ] *(Opcional V1.1 / V2)* Evoluir LOS para riscos competitivos (`scikit-survival`) e benchmarks `aeon` MiniRocket / `TimesFM 2.5`
 
 ### 🔄 Etapa 3 — Incerteza Calibrada, Prontidão (`SimPy`), Análise Contrafactual e Auditoria RS (2024/2025)
 - [x] Implementar calibração conformal heterocedástica em `2023` (`ConformalFloodCalibrator`: eleva cobertura no choque UTI de `34,1% → 61,4%` mantendo `0,00%` violações monotônicas)
