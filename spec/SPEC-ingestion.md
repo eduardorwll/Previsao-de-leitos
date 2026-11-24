@@ -1,6 +1,6 @@
 # Especificação V1 — Módulo `ingestion` (`spec/SPEC-ingestion.md`)
 
-- **Status:** `proposed` *(aguardando aprovação antes de iniciar a implementação em código)*
+- **Status:** `implemented` *(implementado e validado via TDD + dry_run 0-byte no BigQuery real)*
 - **Etapa / Feature:** Etapa 1 — Trilha 1A (Feature `F01 — Ingestão Segura e Contratos LGPD`)
 - **Escopo V1:** Rio Grande do Sul (`sigla_uf = "RS"`, `uf_code = "43"`, 497 municípios, 7 Macrorregiões de Saúde, período `2010–2025`), com arquitetura pronta para expansão nacional (`V2`).
 

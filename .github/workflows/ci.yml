@@ -27,8 +27,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync dev environment (Python 3.12)
-        run: uv sync --extra dev --frozen
+      - name: Sync dev and data environment (Python 3.12)
+        run: uv sync --extra dev --extra data --frozen
 
       - name: C-01 Ruff lint
         run: uv run ruff check src tests scripts
@@ -43,7 +43,7 @@ jobs:
         run: uv run python -c "import previsao_leitos"
 
       - name: C-03 Pytest + coverage gate (>=80%)
-        run: uv run pytest -m "not slow" --cov=src/previsao_leitos --cov-fail-under=80
+        run: uv run pytest -m "not slow and not bigquery" --cov=src/previsao_leitos --cov-fail-under=80
 
       - name: C-06 Dependency vulnerability audit
         run: uv run pip-audit

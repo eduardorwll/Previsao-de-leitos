@@ -11,7 +11,7 @@
 | Etapa | Escopo | Status | Progresso | Marco de Saída |
 | :---: | :--- | :---: | :---: | :--- |
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
-| **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `15%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + testes de vazamento zero |
+| **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `35%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | ⏳ Planejada | `0%` | Modelo *ex-ante* supera Persistência/Sazonal-Ingênuo + calibração (`BSS > 0`) |
 | **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | ⏳ Planejada | `0%` | **V1 RS validada** no holdout intocado `2025` + plano de gatilhos para hospitais-escola |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
@@ -24,7 +24,7 @@
 | Módulo / Feature | Documentação Detalhada | Status | Resumo do Valor Entregue |
 | :--- | :--- | :---: | :--- |
 | **F00 — Domínio, Tipos Validados e Qualidade Base (`domain`)** | [00-dominio-e-fundacao.md](features/00-dominio-e-fundacao.md) | ✅ Concluída | Tipos nominais (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), hierarquia única de exceções, pacote Python 3.12 (`uv`), verificador mecânico de qualidade e CI |
-| **F01 — Ingestão Segura e Contratos LGPD (`ingestion`)** | [01-ingestao-segura.md](features/01-ingestao-segura.md) | 🔄 Spec pronta | BigQuery parametrizado + `dry_run`, adaptador local Parquet para testes, contratos `pandera`/`polars` e supressão de pequenas células ($n < 5$) |
+| **F01 — Ingestão Segura e Contratos LGPD (`ingestion`)** | [01-ingestao-segura.md](features/01-ingestao-segura.md) | ✅ Implementada (1A.1) | BigQuery parametrizado + `dry_run` + RLS-aware, `ParquetFixtureAdapter` offline, cache atômico SHA-256, contratos `polars` e supressão LGPD ($n < 5$) |
 | **F02 — Geoespacial, Bacias e Acessibilidade Viária (`geo`)** | *(a criar na Etapa 1)* | ⏳ Planejada | Geometria métrica `SIRGAS 2000`, Ottobacias ANA (montante→jusante), *catchments* de hospitais-escola, HAND/Sentinel-1 SAR e cortes viários (`OSMnx`) |
 | **F03 — Hidrologia Calibrada (`hydrology`)** | *(a criar na Etapa 2)* | ⏳ Planejada | Grade diária sem lacunas, `HydroFiLMMonotonicNet` (RS) e `HydroTFTNet` (BR) com monotonicidade real e calibração pós-hoc (ECE/BSS) |
 | **F04 — Demanda de Internações e Tempo de Permanência (`demand`)** | *(a criar na Etapa 2)* | ⏳ Planejada | `SIH-SUS` agregado + `SINAN`, baselines `statsmodels`/`scikit-learn` quantil, LOS sob riscos competitivos (`scikit-survival`), modelo hierárquico `PyMC` e Hetero-GNN (`PyG` na V2) |
@@ -48,10 +48,9 @@
 ### 🔄 Etapa 1 — Arquitetura Modular, Ingestão Parametrizada e Base RS (Abordagem Mista)
 - **Trilha 1A — Núcleo Semanal RS (*Tracer Bullet* Prioritário):**
   - [x] Especificar contrato do módulo `ingestion` (`spec/SPEC-ingestion.md`) e guia de setup seguro do BigQuery (`docs/runbooks/setup-bigquery.md`)
+  - [x] Implementar `TabularSourcePort` (`BigQueryAdapter` parametrizado com `dry_run` + `ParquetFixtureAdapter`), cache atômico por hash, contratos `polars` e supressão LGPD primária/complementar ($n < 5$)
   - [ ] Especificar contrato do módulo `geo` (`spec/SPEC-geo.md`)
-  - [ ] Implementar `TabularSourcePort` (`BigQueryAdapter` parametrizado com `dry_run` + `ParquetFixtureAdapter`) e cache atômico por hash
-  - [ ] Extrair catálogo de hospitais-escola do RS (`br_ms_cnes.estabelecimento` + `leito` separando **UTI Adulto, UTI Ped/Neo, Clínico, Cirúrgico** e SUS vs. privado + `estabelecimento_ensino`)
-  - [ ] Extrair demanda semanal agregada `SIH-SUS` (por `CNES`, especialidade, CID-10, `CAR_INT`, `DIAS_PERM`, `UTI_MES_TO`, fluxo `MUNIC_RES → CNES`, zero PII, supressão $n < 5$) + notificações `SINAN` (Leptospirose/Onda 2)
+  - [ ] Executar extração real RS (`br_ms_cnes` + `br_ms_sih` + `SINAN` + `IBGE`) e auditar anos disponíveis no tier público BigQuery vs. DATASUS FTP (2024–2025)
   - [ ] Construir ETL hidrológico 100% RS (497 mun.) com `MERGE-CPTEC` + `ANA HidroWeb / Ottobacias` (montante→jusante) + `S2iD FIDE` + `MapBiomas` + `IBGE/Macrorregiões` em grade calendário completa
   - [ ] Entregar *Tracer Bullet* semanal ($h \in \{1,2,3,4\}$ semanas, foco $h=2$ semanas) com baseline de defasagem distribuída vs. Persistência por Macrorregião/Hospital-Escola e testes *Prove-It* (zero vazamento, lacunas calendário, monotonicidade)
 - **Trilha 1B — Enriquecimento Físico e Fila Reprimida (Incremental):**

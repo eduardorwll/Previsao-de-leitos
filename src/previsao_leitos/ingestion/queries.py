@@ -1,0 +1,271 @@
+"""Construtores de QuerySpec 100% parametrizados para BigQuery (basedosdados)."""
+
+from __future__ import annotations
+
+from previsao_leitos.domain import CodigoUF
+from previsao_leitos.ingestion.ports import UF_CODE_TO_SIGLA, QueryParam, QuerySpec
+
+_SQL_CNES_TEACHING_HOSPITALS = """
+WITH ensino AS (
+    SELECT DISTINCT
+        ano,
+        mes,
+        id_estabelecimento_cnes
+    FROM `basedosdados.br_ms_cnes.estabelecimento_ensino`
+    WHERE ano BETWEEN @ano_inicio AND @ano_fim
+      AND sigla_uf = @sigla_uf
+)
+SELECT
+    est.id_estabelecimento_cnes,
+    est.id_municipio,
+    est.sigla_uf,
+    est.ano,
+    est.mes,
+    est.tipo_unidade,
+    (
+        ens.id_estabelecimento_cnes IS NOT NULL
+        OR est.tipo_atividade_ensino_pesquisa IN ('1', '2', '3')
+    ) AS is_hospital_ensino
+FROM `basedosdados.br_ms_cnes.estabelecimento` AS est
+LEFT JOIN ensino AS ens
+  ON est.ano = ens.ano
+ AND est.mes = ens.mes
+ AND est.id_estabelecimento_cnes = ens.id_estabelecimento_cnes
+WHERE est.ano BETWEEN @ano_inicio AND @ano_fim
+  AND est.sigla_uf = @sigla_uf
+  AND est.id_municipio IS NOT NULL
+  AND (est.indicador_leito_hospitalar = 1 OR est.tipo_unidade IN ('05', '07', '20', '21'))
+"""
+
+_SQL_CNES_BEDS_BY_SPECIALTY = """
+SELECT
+    id_estabelecimento_cnes,
+    id_municipio,
+    ano,
+    mes,
+    CASE
+        WHEN tipo_especialidade_leito IN ('74', '75', '76', '85') THEN 'uti_adulto'
+        WHEN tipo_especialidade_leito IN ('77', '78', '79', '86') THEN 'uti_pediatrica'
+        WHEN tipo_especialidade_leito IN ('80', '81', '82') THEN 'uti_neonatal'
+        WHEN tipo_especialidade_leito IN ('92', '93', '94', '95', '96') THEN 'uci'
+        WHEN tipo_leito = '1' THEN 'cirurgico'
+        WHEN tipo_leito = '2' THEN 'clinico'
+        WHEN tipo_leito = '4' THEN 'obstetrico'
+        WHEN tipo_leito = '5' THEN 'pediatrico'
+        ELSE 'outros'
+    END AS categoria_leito,
+    SUM(IFNULL(quantidade_total, 0)) AS quantidade_existente,
+    SUM(LEAST(IFNULL(quantidade_sus, 0), IFNULL(quantidade_total, 0))) AS quantidade_sus
+FROM `basedosdados.br_ms_cnes.leito`
+WHERE ano BETWEEN @ano_inicio AND @ano_fim
+  AND sigla_uf = @sigla_uf
+  AND id_municipio IS NOT NULL
+GROUP BY
+    id_estabelecimento_cnes,
+    id_municipio,
+    ano,
+    mes,
+    categoria_leito
+"""
+
+_SQL_SIH_WEEKLY_DEMAND = """
+SELECT
+    id_estabelecimento_cnes,
+    EXTRACT(ISOYEAR FROM data_internacao) AS ano_epi,
+    EXTRACT(ISOWEEK FROM data_internacao) AS semana_epi,
+    CASE
+        WHEN especialidade_leito = '01' THEN 'cirurgico'
+        WHEN especialidade_leito = '02' THEN 'obstetrico'
+        WHEN especialidade_leito = '03' THEN 'clinico'
+        WHEN especialidade_leito = '07' THEN 'pediatrico'
+        ELSE 'outros'
+    END AS especialidade,
+    CASE
+        WHEN cid_principal_categoria = 'A27' THEN 'leptospirose'
+        WHEN cid_principal_categoria BETWEEN 'A00' AND 'A09'
+          OR cid_principal_categoria = 'B15' THEN 'infecciosas_hidricas'
+        WHEN cid_principal_categoria BETWEEN 'S00' AND 'T98' THEN 'trauma'
+        WHEN cid_principal_categoria BETWEEN 'J00' AND 'J99' THEN 'respiratorio'
+        WHEN cid_principal_categoria BETWEEN 'I00' AND 'I99'
+          OR cid_principal_categoria BETWEEN 'N17' AND 'N19' THEN 'cardiovascular_renal'
+        ELSE 'outros'
+    END AS grupo_cid,
+    CASE
+        WHEN carater_internacao = '01' THEN 'eletivo'
+        ELSE 'urgencia'
+    END AS carater_atendimento,
+    COUNT(*) AS internacoes,
+    SUM(IFNULL(quantidade_dias_permanencia, 0)) AS dias_permanencia_total,
+    SUM(IFNULL(quantidade_dias_uti_mes, 0)) AS diarias_uti_total,
+    SUM(IF(indicador_obito = 1, 1, 0)) AS obitos,
+    SUM(IF(indicador_obito = 1, 0, 1)) AS altas_vivas
+FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+WHERE ano BETWEEN @ano_inicio AND @ano_fim
+  AND sigla_uf = @uf_int
+  AND data_internacao IS NOT NULL
+  AND id_estabelecimento_cnes IS NOT NULL
+GROUP BY
+    id_estabelecimento_cnes,
+    ano_epi,
+    semana_epi,
+    especialidade,
+    grupo_cid,
+    carater_atendimento
+"""
+
+_SQL_SIH_REFERRAL_FLOWS = """
+SELECT
+    SUBSTR(id_municipio_paciente, 1, 6) AS id_municipio_residencia_6d,
+    id_estabelecimento_cnes,
+    EXTRACT(ISOYEAR FROM data_internacao) AS ano_epi,
+    EXTRACT(ISOWEEK FROM data_internacao) AS semana_epi,
+    COUNT(*) AS internacoes
+FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+WHERE ano BETWEEN @ano_inicio AND @ano_fim
+  AND sigla_uf = @uf_int
+  AND data_internacao IS NOT NULL
+  AND id_estabelecimento_cnes IS NOT NULL
+  AND id_municipio_paciente IS NOT NULL
+GROUP BY
+    id_municipio_residencia_6d,
+    id_estabelecimento_cnes,
+    ano_epi,
+    semana_epi
+"""
+
+_SQL_IBGE_MUNICIPIOS = """
+SELECT
+    m.id_municipio,
+    m.nome,
+    m.sigla_uf,
+    p.ano,
+    CAST(p.populacao AS FLOAT64) AS populacao,
+    m.id_regiao_saude,
+    m.nome_regiao_saude
+FROM `basedosdados.br_bd_diretorios_brasil.municipio` AS m
+LEFT JOIN `basedosdados.br_ibge_populacao.municipio` AS p
+  ON m.id_municipio = p.id_municipio
+ AND p.ano BETWEEN @ano_inicio AND @ano_fim
+WHERE m.sigla_uf = @sigla_uf
+"""
+
+
+def build_cnes_teaching_hospitals_query(
+    *, uf: CodigoUF, ano_inicio: int, ano_fim: int
+) -> QuerySpec:
+    """Retorna QuerySpec parametrizada do catálogo CNES de hospitais-escola."""
+    return QuerySpec(
+        name="cnes_hospitais_escola",
+        sql=_SQL_CNES_TEACHING_HOSPITALS,
+        params=(
+            QueryParam("sigla_uf", "STRING", UF_CODE_TO_SIGLA[str(uf)]),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_estabelecimento_cnes",
+            "id_municipio",
+            "sigla_uf",
+            "ano",
+            "mes",
+            "tipo_unidade",
+            "is_hospital_ensino",
+        ),
+    )
+
+
+def build_cnes_beds_by_specialty_query(
+    *, uf: CodigoUF, ano_inicio: int, ano_fim: int
+) -> QuerySpec:
+    """Retorna QuerySpec parametrizada de leitos CNES por tipo específico de UTI/especialidade."""
+    return QuerySpec(
+        name="cnes_leitos_especialidade",
+        sql=_SQL_CNES_BEDS_BY_SPECIALTY,
+        params=(
+            QueryParam("sigla_uf", "STRING", UF_CODE_TO_SIGLA[str(uf)]),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_estabelecimento_cnes",
+            "id_municipio",
+            "ano",
+            "mes",
+            "categoria_leito",
+            "quantidade_existente",
+            "quantidade_sus",
+        ),
+    )
+
+
+def build_sih_weekly_demand_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: int) -> QuerySpec:
+    """Retorna QuerySpec parametrizada da demanda semanal agregada SIH-SUS (zero PII)."""
+    return QuerySpec(
+        name="sih_demanda_semanal_agg",
+        sql=_SQL_SIH_WEEKLY_DEMAND,
+        params=(
+            QueryParam("uf_int", "INT64", int(str(uf))),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_estabelecimento_cnes",
+            "ano_epi",
+            "semana_epi",
+            "especialidade",
+            "grupo_cid",
+            "carater_atendimento",
+            "internacoes",
+            "dias_permanencia_total",
+            "diarias_uti_total",
+            "obitos",
+            "altas_vivas",
+        ),
+    )
+
+
+def build_sih_referral_flows_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: int) -> QuerySpec:
+    """Retorna QuerySpec parametrizada dos fluxos semanais MUNIC_RES -> CNES (zero PII)."""
+    return QuerySpec(
+        name="sih_fluxos_referencia_semanal",
+        sql=_SQL_SIH_REFERRAL_FLOWS,
+        params=(
+            QueryParam("uf_int", "INT64", int(str(uf))),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_municipio_residencia_6d",
+            "id_estabelecimento_cnes",
+            "ano_epi",
+            "semana_epi",
+            "internacoes",
+        ),
+    )
+
+
+def build_ibge_municipios_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: int) -> QuerySpec:
+    """Retorna QuerySpec parametrizada de diretório municipal, região de saúde e população IBGE."""
+    return QuerySpec(
+        name="ibge_municipios_rs",
+        sql=_SQL_IBGE_MUNICIPIOS,
+        params=(
+            QueryParam("sigla_uf", "STRING", UF_CODE_TO_SIGLA[str(uf)]),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "id_municipio",
+            "nome",
+            "sigla_uf",
+            "ano",
+            "populacao",
+            "id_regiao_saude",
+            "nome_regiao_saude",
+        ),
+    )

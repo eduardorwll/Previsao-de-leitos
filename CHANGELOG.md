@@ -5,6 +5,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 ## [Unreleased]
 
 ### Added
+- **Etapa 1 / Feature F01 (`ingestion` — Implementação TDD Fatia 1A.1):** Implementado módulo `src/previsao_leitos/ingestion/` (`ports.py`, `adapters.py`, `cache.py`, `lgpd.py`, `schemas.py`, `queries.py`, `pipeline.py`) com `BigQueryAdapter` parametrizado + `dry_run` RLS-aware, `ParquetFixtureAdapter` offline, cache Parquet atômico SHA-256, contratos `polars` preservando zeros à esquerda e supressão LGPD primária e complementar ($n < 5$).
+- **Testes & CI F01:** Adicionados 21 novos testes (`tests/unit/test_ingestion_*.py` e `tests/integration/test_ingestion_rs_pipeline.py` totalizando 38 testes offline com `89,4%` de cobertura) + teste ao vivo `0 bytes` (`tests/integration/test_bigquery_schema_live.py`) e atualizado `.github/workflows/ci.yml` com `--extra data`.
 - **Etapa 1 / Feature F01 (`ingestion` — Especificação V1):** Especificação completa em `spec/SPEC-ingestion.md` (costura `TabularSourcePort` com `BigQueryAdapter` parametrizado + `dry_run` + `ParquetFixtureAdapter`, cache atômico SHA-256, extração CNES por tipo específico de UTI e hospitais-escola, demanda semanal `SIH-SUS`/`SINAN` agregada com supressão LGPD $n < 5$), documentação da feature (`docs/features/01-ingestao-segura.md`) e guia seguro de acesso ao BigQuery sem chaves `.json` (`docs/runbooks/setup-bigquery.md`).
 
 ### Changed
