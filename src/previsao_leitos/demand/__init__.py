@@ -17,6 +17,11 @@ from previsao_leitos.demand.models import (
     PooledRidgeDeltaForecaster,
     QuantileGBDTForecaster,
 )
+from previsao_leitos.demand.nowcasting import (
+    ChainLadderNowcaster,
+    CompetingRisksLosEstimator,
+    CompetingRisksSummary,
+)
 from previsao_leitos.demand.two_stage import (
     OrthogonalTwoStageOccupancyForecaster,
     select_demand_forecaster,
@@ -25,6 +30,9 @@ from previsao_leitos.demand.two_stage import (
 __all__ = [
     "QUANTILE_COL_NAMES",
     "QUANTILE_LEVELS",
+    "ChainLadderNowcaster",
+    "CompetingRisksLosEstimator",
+    "CompetingRisksSummary",
     "ConformalFloodCalibrator",
     "DemandForecaster",
     "ExtremeValueGpdTail",

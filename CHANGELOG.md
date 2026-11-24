@@ -8,6 +8,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F04.3 (`demand/nowcasting.py` — *Nowcasting* `Chain-Ladder` e LOS Riscos Competitivos):**
+  - Implementado `ChainLadderNowcaster` estimando frações de completude $F(d)$ sobre o triângulo de atraso para corrigir censura à direita em competências recentes (`2025–2026+`) com intervalos `nowcast_p10/p50/p90`.
+  - Implementado `CompetingRisksLosEstimator` causal (`<= 2022`) separando incidência acumulada (CIF) e permanência média condicional entre alta viva e óbito hospitalar.
 - **Etapa 3 / Feature F04.2 (`demand/extreme_uncertainty.py` — `EVT-GPD`, `Mondrian Conformal` e Pooling Hierárquico):**
   - Implementados `ExtremeValueGpdTail` (*Peaks-Over-Threshold* Pareto Generalizada), `MondrianEnsoConformalCalibrator` (calibração conformal por estrato porte × regime `ENSO` com encolhimento hierárquico, evitando contaminação da escala de POA sobre o interior) e `HierarchicalBasinBayesShrinkage` (*Empirical Bayes* `Hospital/Região ⊂ Bacia`).
 - **Etapa 2–3 / Feature F04.1 (`demand/two_stage.py` — Arquitetura Ortogonal 2 Estágios em Taxa Relativa):**
