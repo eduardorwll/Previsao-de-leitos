@@ -35,12 +35,13 @@ def build_causal_landfill_exposure(
     mun_to_reg: pl.DataFrame,
     ref_year: int = 2022,
     polder_municipalities: frozenset[str] = RS_POLDER_MUNICIPALITIES,
+    mun_weights: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Calcula exposição causal (`ano <= ref_year`) de áreas urbanas sobre várzeas/banhados.
 
-    Combina classes oficiais MapBiomas (Urbano `24`, Banhado/Área Pantanosa `11`, Marisma `84`,
-    Água `33`, Floresta `3`/`49`) desde o primeiro ano disponível (ex.: 1985) até `ref_year`,
-    agregando por área municipal para cada `id_regiao_saude`.
+    Quando `mun_weights` (`id_municipio`, `peso_exposicao` — ex.: população ou leitos CNES)
+    é fornecido, agrega as frações municipais por média ponderada para eliminar a diluição
+    espacial MAUP causada por municípios rurais extensos na mesma Região de Saúde.
     """
     causal = mapbiomas_df.filter(pl.col("ano") <= ref_year)
     if causal.is_empty():
@@ -97,27 +98,71 @@ def build_causal_landfill_exposure(
         )
     )
 
+    if mun_weights is not None:
+        w_df = (
+            mun_weights.select(["id_municipio", "peso_exposicao"])
+            .with_columns(pl.col("peso_exposicao").cast(pl.Float64).clip(lower_bound=0.0))
+            .unique(subset=["id_municipio"])
+        )
+        mun_fracs = (
+            mun_metrics.filter(pl.col("total_ha_ref") > 0.0)
+            .with_columns(
+                (pl.col("urb_ha_ref") / pl.col("total_ha_ref")).alias("_f_urb"),
+                (pl.col("wet_ha_ref") / pl.col("total_ha_ref")).alias("_f_wet"),
+                (pl.col("flor_ha_ref") / pl.col("total_ha_ref")).alias("_f_flor"),
+                (pl.col("perda_banhado_ha") / pl.col("total_ha_ref")).alias("_f_perda"),
+                (pl.col("expansao_urb_ha") / pl.col("total_ha_ref")).alias("_f_exp"),
+                (pl.col("polder_area_ha") / pl.col("total_ha_ref")).alias("_f_polder"),
+            )
+            .join(w_df, on="id_municipio", how="left")
+            .with_columns(pl.col("peso_exposicao").fill_null(1.0).alias("_w"))
+        )
+        reg_base = (
+            mun_fracs.group_by("id_regiao_saude")
+            .agg(
+                pl.col("_w").sum().alias("_w_sum"),
+                (pl.col("_f_urb") * pl.col("_w")).sum().alias("_w_urb"),
+                (pl.col("_f_wet") * pl.col("_w")).sum().alias("_w_wet"),
+                (pl.col("_f_flor") * pl.col("_w")).sum().alias("_w_flor"),
+                (pl.col("_f_perda") * pl.col("_w")).sum().alias("_w_perda"),
+                (pl.col("_f_exp") * pl.col("_w")).sum().alias("_w_exp"),
+                (pl.col("_f_polder") * pl.col("_w")).sum().alias("_w_polder"),
+            )
+            .filter(pl.col("_w_sum") > 0.0)
+            .with_columns(
+                (pl.col("_w_urb") / pl.col("_w_sum")).alias("frac_urbano"),
+                (pl.col("_w_wet") / pl.col("_w_sum")).alias("frac_banhado_agua"),
+                (pl.col("_w_flor") / pl.col("_w_sum")).alias("frac_floresta"),
+                (pl.col("_w_perda") / pl.col("_w_sum")).alias("perda_banhado_rel"),
+                (pl.col("_w_exp") / pl.col("_w_sum")).alias("expansao_urbana_rel"),
+                (pl.col("_w_polder") / pl.col("_w_sum")).alias("frac_area_polder_regiao"),
+            )
+        )
+    else:
+        reg_base = (
+            mun_metrics.group_by("id_regiao_saude")
+            .agg(
+                pl.col("total_ha_ref").sum().alias("_tot"),
+                pl.col("urb_ha_ref").sum().alias("_urb"),
+                pl.col("wet_ha_ref").sum().alias("_wet"),
+                pl.col("flor_ha_ref").sum().alias("_flor"),
+                pl.col("perda_banhado_ha").sum().alias("_perda_wet"),
+                pl.col("expansao_urb_ha").sum().alias("_exp_urb"),
+                pl.col("polder_area_ha").sum().alias("_polder_ha"),
+            )
+            .filter(pl.col("_tot") > 0.0)
+            .with_columns(
+                (pl.col("_urb") / pl.col("_tot")).alias("frac_urbano"),
+                (pl.col("_wet") / pl.col("_tot")).alias("frac_banhado_agua"),
+                (pl.col("_flor") / pl.col("_tot")).alias("frac_floresta"),
+                (pl.col("_perda_wet") / pl.col("_tot")).alias("perda_banhado_rel"),
+                (pl.col("_exp_urb") / pl.col("_tot")).alias("expansao_urbana_rel"),
+                (pl.col("_polder_ha") / pl.col("_tot")).alias("frac_area_polder_regiao"),
+            )
+        )
+
     reg_agg = (
-        mun_metrics.group_by("id_regiao_saude")
-        .agg(
-            pl.col("total_ha_ref").sum().alias("_tot"),
-            pl.col("urb_ha_ref").sum().alias("_urb"),
-            pl.col("wet_ha_ref").sum().alias("_wet"),
-            pl.col("flor_ha_ref").sum().alias("_flor"),
-            pl.col("perda_banhado_ha").sum().alias("_perda_wet"),
-            pl.col("expansao_urb_ha").sum().alias("_exp_urb"),
-            pl.col("polder_area_ha").sum().alias("_polder_ha"),
-        )
-        .filter(pl.col("_tot") > 0.0)
-        .with_columns(
-            (pl.col("_urb") / pl.col("_tot")).alias("frac_urbano"),
-            (pl.col("_wet") / pl.col("_tot")).alias("frac_banhado_agua"),
-            (pl.col("_flor") / pl.col("_tot")).alias("frac_floresta"),
-            (pl.col("_perda_wet") / pl.col("_tot")).alias("perda_banhado_rel"),
-            (pl.col("_exp_urb") / pl.col("_tot")).alias("expansao_urbana_rel"),
-            (pl.col("_polder_ha") / pl.col("_tot")).alias("frac_area_polder_regiao"),
-        )
-        .with_columns(
+        reg_base.with_columns(
             (
                 pl.col("frac_urbano")
                 * (pl.col("frac_banhado_agua") + pl.col("perda_banhado_rel"))

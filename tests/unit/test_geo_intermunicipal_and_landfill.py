@@ -60,8 +60,21 @@ def test_weighted_basin_routing_applies_weights_and_travel_lag_without_future_le
     sem19_pelotas = out.filter(
         (pl.col("bacia_id") == "lagoa_patos_sul") & (pl.col("semana_epi") == 19)
     )["chuva_montante_pond"][0]
-    # Onda da semana 18 no Guaíba (200.0) chega em Pelotas/Lagoa dos Patos na semana 19 (lag=1)!
-    assert sem19_pelotas == pytest.approx(200.0)
+    # Convolução multi-salto (padrão V1.1): Taquari (0.75*400) + Caí (0.25*100) + Guaíba (1.0*200)
+    # divididos pela soma de pesos (2.0) = 262.5 chegando na semana 19 (lag=1).
+    assert sem19_pelotas == pytest.approx(262.5)
+
+    out_1hop = topo.propagate_weighted_upstream(
+        weekly,
+        basin_col="bacia_id",
+        value_col="chuva_sem_mm",
+        output_col="chuva_montante_pond",
+        multi_hop=False,
+    )
+    sem19_pelotas_1hop = out_1hop.filter(
+        (pl.col("bacia_id") == "lagoa_patos_sul") & (pl.col("semana_epi") == 19)
+    )["chuva_montante_pond"][0]
+    assert sem19_pelotas_1hop == pytest.approx(200.0)
 
     # Cabeceira nunca recebe chuva de jusante
     sem18_taquari = out.filter(

@@ -87,3 +87,5 @@ Conectar os dados reais de saúde do RS (extraídos em `data/raw/` na feature **
 - [x] Implementar `hydro_sources.py` (`NasaPowerHydroAdapter` com `V10M`, `OpenMeteoEra5Adapter` e `HydroFixtureAdapter`)
 - [x] Implementar `landfill_exposure.py` (exposição causal `MapBiomas <= 2022` de áreas aterradas/banhados + sistemas de pôlderes) e `referral_graph.py` (matriz intermunicipal causal `W_ref` sobre `1,78M` fluxos `SIH-SUS`)
 - [x] Implementar `panel_builder.py` + executar ablação real RS (`F02` vs. `F02.1`, `2023` e `2024`, `2025` bloqueado)
+- [x] **Física Fina V1.1 (`F02.2`):** corrigir `BasinTopology.propagate_weighted_upstream` para convolução transitiva multi-salto completa (`transitive_upstream_paths`), adicionar ponderação populacional/leitos anti-MAUP em `build_causal_landfill_exposure` e implementar agregadores de `ANA HidroWeb`, `MERGE-CPTEC 0,1°` e `SAR` 2024 em `geo/fine_hydro_sources.py`
+- [ ] **Teleconexões El Niño / ENSO (`F02.3`):** implementar conector causal de índices `ONI`, `Niño 3.4`, `SOI`, `MEI.v2`, `TSA` e `SALLJ` com lags `1..24` semanas

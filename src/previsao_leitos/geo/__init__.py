@@ -17,6 +17,11 @@ from previsao_leitos.geo.calendar_grid import (
     build_ex_ante_distributed_lags,
     compute_calendar_hydro_features,
 )
+from previsao_leitos.geo.fine_hydro_sources import (
+    aggregate_ana_hidroweb_weekly,
+    aggregate_merge_cptec_weekly,
+    aggregate_sar_flood_extent,
+)
 from previsao_leitos.geo.hydro_sources import (
     HydroFixtureAdapter,
     HydroSourcePort,
@@ -54,7 +59,10 @@ __all__ = [
     "SplitPolicy",
     "TracerBulletReport",
     "WeightedBasinEdge",
+    "aggregate_ana_hidroweb_weekly",
     "aggregate_daily_to_iso_weekly",
+    "aggregate_merge_cptec_weekly",
+    "aggregate_sar_flood_extent",
     "build_causal_landfill_exposure",
     "build_causal_referral_matrix",
     "build_complete_daily_grid",

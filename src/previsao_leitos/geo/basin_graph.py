@@ -199,6 +199,33 @@ class BasinTopology:
         """Retorna todas as sub-bacias estritamente a montante de `basin_id`."""
         return self._ancestors.get(basin_id, frozenset())
 
+    def transitive_upstream_paths(self) -> tuple[WeightedBasinEdge, ...]:
+        """Expande todos os caminhos dirigidos montante->jusante compondo pesos e lags.
+
+        Em um DAG hidrográfico, cada caminho simples `src -> ... -> dst` contribui com
+        peso composto igual ao produto dos pesos das arestas e tempo de trânsito igual
+        à soma das defasagens (`travel_weeks`), consolidados por `(src, dst, lag)`.
+        """
+        out_adj: dict[str, list[WeightedBasinEdge]] = defaultdict(list)
+        for edge in self._weighted_edges:
+            out_adj[edge.src].append(edge)
+
+        accum: dict[tuple[str, str, int], float] = defaultdict(float)
+        for origin in sorted(self._nodes):
+            stack: list[tuple[str, float, int]] = [(origin, 1.0, 0)]
+            while stack:
+                cur, cur_w, cur_lag = stack.pop()
+                for edge in out_adj.get(cur, ()):
+                    nxt_w = cur_w * edge.weight
+                    nxt_lag = cur_lag + edge.travel_weeks
+                    accum[(origin, edge.dst, nxt_lag)] += nxt_w
+                    stack.append((edge.dst, nxt_w, nxt_lag))
+
+        return tuple(
+            WeightedBasinEdge(src=src, dst=dst, weight=weight, travel_weeks=lag)
+            for (src, dst, lag), weight in sorted(accum.items())
+        )
+
     def propagate_upstream(
         self,
         weekly_df: pl.DataFrame,
@@ -244,10 +271,17 @@ class BasinTopology:
         basin_col: str = "bacia_id",
         value_col: str = "chuva_sem_mm",
         output_col: str = "chuva_montante_pond",
+        multi_hop: bool = True,
     ) -> pl.DataFrame:
-        """Propaga sinais a montante usando pesos físicos (`weight`) e trânsito (`travel_weeks`)."""
+        """Propaga sinais a montante usando pesos físicos (`weight`) e trânsito (`travel_weeks`).
+
+        Quando `multi_hop=True` (padrão V1.1), realiza convolução transitiva completa sobre
+        todos os ancestrais do DAG (levando Serra/Taquari/Jacuí até POA e Lagoa dos Patos).
+        """
         if weekly_df.is_empty() or not self._weighted_edges:
             return weekly_df.with_columns(pl.lit(0.0).alias(output_col))
+
+        active_edges = self.transitive_upstream_paths() if multi_hop else self._weighted_edges
 
         # Agrega primeiro por bacia e garante grade ISO semanal contínua antes de aplicar lag
         basin_series = weekly_df.group_by([basin_col, "ano_epi", "semana_epi"]).agg(
@@ -255,7 +289,7 @@ class BasinTopology:
         )
         basin_grid = build_complete_iso_week_grid(basin_series, entity_col=basin_col)
 
-        distinct_lags = sorted({e.travel_weeks for e in self._weighted_edges})
+        distinct_lags = sorted({e.travel_weeks for e in active_edges})
         lag_exprs = [
             pl.col("_b_val").shift(lag).over(basin_col).alias(f"_lag_{lag}")
             for lag in distinct_lags
@@ -264,7 +298,7 @@ class BasinTopology:
 
         parts: list[pl.DataFrame] = []
         for lag in distinct_lags:
-            edges_for_lag = [e for e in self._weighted_edges if e.travel_weeks == lag]
+            edges_for_lag = [e for e in active_edges if e.travel_weeks == lag]
             edge_df = pl.DataFrame(
                 {
                     "_src_basin": [e.src for e in edges_for_lag],

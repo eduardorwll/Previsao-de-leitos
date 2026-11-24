@@ -8,6 +8,10 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 1–3 / Feature F02.2 (`geo` — Convolução Multi-Salto, `MapBiomas` Anti-MAUP e Fontes Hidrológicas Finas):**
+  - Adicionado `BasinTopology.transitive_upstream_paths()` e modo `multi_hop=True` padrão em `propagate_weighted_upstream` (`geo/basin_graph.py`), propagando 100% das bacias ancestrais (Serra/Taquari/Jacuí até POA e Lagoa dos Patos) com composição exata de pesos e defasagens (`travel_weeks`).
+  - Adicionado parâmetro `mun_weights` em `build_causal_landfill_exposure` (`geo/landfill_exposure.py`) para ponderação por população/leitos municipais, eliminando a diluição espacial MAUP.
+  - Criado `src/previsao_leitos/geo/fine_hydro_sources.py` com agregadores determinísticos para `ANA HidroWeb` (cotas/vazões/excedência), `MERGE-CPTEC 0,1°` e mancha `Sentinel-1 SAR / IPH-UFRGS`.
 - **Etapa 1–3 / Feature F01.2 (`ingestion/epidemiology_sources.py` — `GERINT-POA`, `SINAN` 1ºs Sintomas e `SIVEP-Gripe`):**
   - Implementados `aggregate_gerint_poa_weekly` (demanda solicitada, fila reprimida e tempo de espera P50/P90), `aggregate_sinan_leptospirose_weekly` (agregado por `data_primeiros_sintomas`) e `aggregate_sivep_gripe_weekly` (isolando onda viral de SRAG de inverno), todos com validação de colunas permitidas anti-PII e supressão LGPD ($n < 5$).
 - **Etapa 1–3 / Feature F01.1 (`ingestion` — Saneamento Censo Ativo, `W_ref` Externa Pré-LGPD e `CNES` Temporal):**
