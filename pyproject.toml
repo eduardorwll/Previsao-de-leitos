@@ -12,6 +12,9 @@ license = { text = "MIT" }
 authors = [{ name = "Equipe Previsao-de-leitos" }]
 dependencies = []
 
+[project.scripts]
+previsao-leitos = "previsao_leitos.cli.main:cli_main"
+
 [project.optional-dependencies]
 data = [
     "polars>=1.20.0",

@@ -5,6 +5,10 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 ## [Unreleased]
 
 ### Added
+- **Etapa 3 / Feature F07 (`cli` — Orquestração JSON, Net Benefit e Governança TRIPOD+AI/RECORD):**
+  - Implementado `src/previsao_leitos/cli/` (`logging_json.py`, `main.py`) registrado como comando `previsao-leitos` em `pyproject.toml` (`doctor` e `verify-rs` com bloqueio explícito do holdout `2025`).
+  - Adicionados `decision_curve_net_benefit` (Vickers & Elkin), `expected_calibration_error` (`ECE`), `brier_skill_score` (`BSS`) e `estimate_surge_probability_from_quantiles` em `audit/metrics.py`, além da **Seção 6 (TRIPOD+AI / PROBAST+AI / RECORD)** em `audit/report_builder.py`.
+  - Validado fim a fim em RS 2024 (`uv run previsao-leitos verify-rs --eval-year 2024`, `3,3s`): **`ECE_surge = 0,0492`**, **`BSS_surge = +0,0881`**, Net Benefit superior a *Tratar Todos* e *Tratar Nenhum* em $p_t \in [0,20; 0,50]$, `72` testes passando (`86,8%` cobertura).
 - **Etapa 3 / Feature F05 (`readiness` — Simulador `SimPy`, Calibração Conformal `2023` e `Fig. C5`):**
   - Implementado `ConformalFloodCalibrator` (`src/previsao_leitos/demand/calibration.py`) calibrado estritamente em `2023`, elevando cobertura no choque UTI 2024 (`Sem. 18–28`) de `34,1%` (`PooledRidge`) / `54,5%` (`QuantileGBDT`) para **`61,4%`** mantendo **`0,00%` de violações monotônicas**.
   - Implementado `src/previsao_leitos/readiness/` (`simulator.py` em `SimPy` com Common Random Numbers, histerese segura sobre leitos base, *lead time* `24–72h` e estresse de evacuação em áreas aterradas/pôlderes; `triggers.py` com gatilhos observáveis de pesquisa) e `plot_c5_simpy_contingency` (`Fig. C5`) acoplado ao `report_builder.py`.

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
+
+from previsao_leitos.domain import DataContractError
 
 
 @dataclass(frozen=True)
@@ -127,3 +129,98 @@ def evaluate_probabilistic_predictions(
         "pinball_p95": pinball_loss(y_true, p95, alpha=0.95),
         "cobertura_p10_p90": empirical_coverage(y_true, p10, p90),
     }
+
+
+def expected_calibration_error(
+    y_true_event: np.ndarray,
+    pred_prob: np.ndarray,
+    *,
+    n_bins: int = 10,
+) -> float:
+    """Calcula Expected Calibration Error (ECE) em [0, 1] para probabilidades previstas."""
+    y = np.asarray(y_true_event, dtype=np.float64)
+    p = np.clip(np.asarray(pred_prob, dtype=np.float64), 0.0, 1.0)
+    if len(y) == 0:
+        raise DataContractError("Vetor vazio em expected_calibration_error.")
+
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+    n = float(len(y))
+    for i in range(n_bins):
+        if i == n_bins - 1:
+            mask = (p >= edges[i]) & (p <= edges[i + 1])
+        else:
+            mask = (p >= edges[i]) & (p < edges[i + 1])
+        count = int(np.sum(mask))
+        if count > 0:
+            ece += (count / n) * abs(float(np.mean(y[mask])) - float(np.mean(p[mask])))
+    return float(ece)
+
+
+def brier_skill_score(y_true_event: np.ndarray, pred_prob: np.ndarray) -> float:
+    """Calcula Brier Skill Score (BSS = 1 - BS / BS_climatologia; >0 supera prevalência)."""
+    y = np.asarray(y_true_event, dtype=np.float64)
+    p = np.clip(np.asarray(pred_prob, dtype=np.float64), 0.0, 1.0)
+    bs_model = float(np.mean((p - y) ** 2))
+    prev = float(np.mean(y))
+    bs_ref = float(np.mean((prev - y) ** 2))
+    if bs_ref <= 1e-12:
+        return 0.0
+    return float(1.0 - (bs_model / bs_ref))
+
+
+def decision_curve_net_benefit(
+    y_true_event: np.ndarray,
+    pred_prob: np.ndarray,
+    *,
+    thresholds: Sequence[float] = (0.10, 0.20, 0.30, 0.40, 0.50),
+) -> pl.DataFrame:
+    """Análise de Curva de Decisão (Vickers & Elkin 2006) para acionamento de contingência."""
+    y = np.asarray(y_true_event, dtype=np.float64) > 0.5
+    p = np.clip(np.asarray(pred_prob, dtype=np.float64), 0.0, 1.0)
+    n = float(len(y))
+    if n <= 0.0:
+        raise DataContractError("Vetor vazio em decision_curve_net_benefit.")
+
+    prevalence = float(np.mean(y))
+    rows: list[dict[str, float]] = []
+    for pt in thresholds:
+        if not (0.0 < pt < 1.0):
+            raise DataContractError(f"Limiar pt deve estar em (0, 1): recebido {pt}")
+        odds = pt / (1.0 - pt)
+        flag = p >= pt
+        tp = float(np.sum(flag & y))
+        fp = float(np.sum(flag & (~y)))
+        nb_model = (tp / n) - (fp / n) * odds
+        nb_all = prevalence - (1.0 - prevalence) * odds
+        rows.append(
+            {
+                "limiar_pt": float(pt),
+                "net_benefit_modelo": nb_model,
+                "net_benefit_tratar_todos": nb_all,
+                "net_benefit_tratar_nenhum": 0.0,
+            }
+        )
+    return pl.DataFrame(rows)
+
+
+def estimate_surge_probability_from_quantiles(
+    preds_df: pl.DataFrame,
+    threshold: np.ndarray,
+) -> np.ndarray:
+    """Estima P(Y >= threshold) por interpolação monotônica linear dos quantis P10/P50/P90/P95."""
+    q_vals = np.column_stack(
+        [
+            preds_df["pred_p10"].to_numpy().astype(np.float64),
+            preds_df["pred_p50"].to_numpy().astype(np.float64),
+            preds_df["pred_p90"].to_numpy().astype(np.float64),
+            preds_df["pred_p95"].to_numpy().astype(np.float64),
+        ]
+    )
+    q_probs = np.array([0.10, 0.50, 0.90, 0.95], dtype=np.float64)
+    probs = np.empty(len(threshold), dtype=np.float64)
+    for i, thr in enumerate(threshold):
+        row = q_vals[i]
+        cdf = float(np.interp(float(thr), row, q_probs, left=0.05, right=0.98))
+        probs[i] = float(np.clip(1.0 - cdf, 0.0, 1.0))
+    return probs

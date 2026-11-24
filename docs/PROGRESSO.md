@@ -13,7 +13,7 @@
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
 | **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | 🔄 Em andamento | `65%` | Modelo *ex-ante* supera Persistência/Sazonal-Ingênuo (`F04` concluída + auditoria contrafactual `F06` ativa) + `HydroFiLMMonotonicNet` (`F03`) |
-| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `70%` | **V1 RS validada** no holdout intocado `2025` (`F05 SimPy` + `Conformal 2023` + `Fig. C1–C5` concluídas; falta `PyMC`/`SHAP` e auditoria única `2025`) |
+| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `85%` | **V1 RS pronta para auditoria final `2025`** (`F05 SimPy`, `Conformal 2023`, `Net Benefit`, `F07 CLI`, `Fig. C1–C5` e `TRIPOD+AI/RECORD` concluídos) |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
 | **Etapa 5** | Governança TRIPOD+AI / RECORD, Publicação e Release `v1.0.0` | ⏳ Planejada | `0%` | Checklists completos, reprodutibilidade fim a fim e relatório técnico aberto |
 
@@ -30,7 +30,7 @@
 | **F04 — Demanda de Internações e Tempo de Permanência (`demand`)** | [04-demanda-e-los.md](features/04-demanda-e-los.md) | ✅ Concluída (V1 RS) | Modelos globais nas 30 Regiões RS (`QuantileGBDT` monotônico exato `0,00%` viol., `NegBinHurdle` para Onda 2 Leptospirose `MASE 0,710`, `PooledRidge` UTI `MASE 0,817`) + `SpecialtyLosEstimator` causal (`<= 2022`) |
 | **F05 — Prontidão, Filas Hospitalares e Gatilhos (`readiness`)** | [05-prontidao-e-filas-simpy.md](features/05-prontidao-e-filas-simpy.md) | ✅ Concluída (V1 RS) | `ConformalFloodCalibrator` (`2023`, `0,00%` viol.), simulador de eventos discretos `SimPy` (estresse pôlder `15%`, redução de **`-36,8%`** no pico de fila e **`16`** dias de sobrecarga evitados em POA), gatilhos observáveis e `Fig. C5` |
 | **F06 — Auditoria Estatística, Análise Contrafactual e Relatório (`audit`)** | [06-auditoria-contrafactual-e-relatorio.md](features/06-auditoria-contrafactual-e-relatorio.md) | ✅ Concluída (`C1–C5`) | Controle sintético "sem enchente", validação placebo, decomposição `do()` intermunicipal/aterros, *block-bootstrap* 95% CI, **todas as 5 figuras (`Fig. C1–C5`)** e Relatório de Verificação (`verificacao_cientifica.md` + `run_manifest.json`) |
-| **F07 — CLI e Orquestração Reprodutível (`cli`)** | *(a criar na Etapa 1–3)* | ⏳ Planejada | Ponto de entrada único, logging JSON estruturado, `run_manifest.json` e linhagem de dados reproduzível |
+| **F07 — CLI e Orquestração Reprodutível (`cli`)** | [07-cli-e-governanca.md](features/07-cli-e-governanca.md) | ✅ Concluída (V1 RS) | Comando instalável `previsao-leitos` (`doctor`, `verify-rs`), logging JSON estruturado, Net Benefit (`BSS=+0,088`, `ECE=0,049`), seção TRIPOD+AI/PROBAST+AI/RECORD e bloqueio de `2025` |
 
 ---
 

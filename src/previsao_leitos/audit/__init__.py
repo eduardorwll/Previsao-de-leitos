@@ -9,8 +9,12 @@ from previsao_leitos.audit.counterfactual import (
 from previsao_leitos.audit.metrics import (
     BootstrapCI,
     block_bootstrap_ci,
+    brier_skill_score,
+    decision_curve_net_benefit,
     empirical_coverage,
+    estimate_surge_probability_from_quantiles,
     evaluate_probabilistic_predictions,
+    expected_calibration_error,
     pinball_loss,
 )
 from previsao_leitos.audit.plots import (
@@ -33,11 +37,15 @@ __all__ = [
     "NoFloodSyntheticControl",
     "VerificationReportArtifacts",
     "block_bootstrap_ci",
+    "brier_skill_score",
     "build_verification_report",
+    "decision_curve_net_benefit",
     "decompose_intermunicipal_and_landfill_effect",
     "empirical_coverage",
+    "estimate_surge_probability_from_quantiles",
     "evaluate_counterfactual_accuracy",
     "evaluate_probabilistic_predictions",
+    "expected_calibration_error",
     "pinball_loss",
     "plot_c1_counterfactual_trajectory",
     "plot_c2_shock_excess_accuracy",

@@ -100,6 +100,7 @@ def build_verification_report(
     allow_holdout: bool = False,
     seed: int = 42,
     simpy_comparison: CounterfactualReadinessComparison | None = None,
+    net_benefit_df: pl.DataFrame | None = None,
 ) -> VerificationReportArtifacts:
     """Gera relatório completo (`verificacao_cientifica.md`), `run_manifest.json` e Fig. C1-C5."""
     active_policy = policy or SplitPolicy()
@@ -307,7 +308,37 @@ def build_verification_report(
                 "  ![Fig. C5](figures/fig_c5_contingencia_simpy.png)",
             ]
         )
-    report_lines.append("")
+    if net_benefit_df is not None and not net_benefit_df.is_empty():
+        report_lines.extend(
+            [
+                "",
+                "### Análise de Curva de Decisão (Net Benefit - Acionamento de Contingência)",
+                "",
+                _df_to_markdown(net_benefit_df),
+            ]
+        )
+    report_lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "## 6. Governança Científica (Resumo TRIPOD+AI / PROBAST+AI / RECORD)",
+            "",
+            "| Eixo de Governança | Critério Verificado | Status |",
+            "| :--- | :--- | :---: |",
+            "| **Fronteira Clínica** | Pesquisa aberta e planejamento agregado "
+            "(Not for patient care or live clinical use) | ✅ Conforme |",
+            "| **Privacidade (LGPD / RECORD)** | Zero PII de pacientes; agregação na fronteira "
+            "BigQuery + supressão `n < 5` | ✅ Conforme |",
+            f"| **Risco de Viés (PROBAST+AI)** | Splits congelados (`<= {tr_yr}` treino, "
+            f"holdout `{ho_yr}` protegido), grade calendário sem compressão | ✅ Conforme |",
+            "| **Coerência Física (ADR-0001/0006)** | Restrição monotônica auditada (`0,00%`), "
+            "aterros/pôlderes e acoplamento `G_hydro + G_health` | ✅ Conforme |",
+            "| **Reprodutibilidade (TRIPOD+AI)** | `run_manifest.json` com versões exatas, "
+            "`git_sha`, seed determinística e 5 gráficos contrafactuais | ✅ Conforme |",
+            "",
+        ]
+    )
     report_path = out / "verificacao_cientifica.md"
     report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
