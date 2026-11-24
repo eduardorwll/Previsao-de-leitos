@@ -91,7 +91,7 @@ class ConformalFloodCalibrator:
             if col in train_df.columns:
                 arr = train_df[col].to_numpy().astype(np.float64)
                 mu = float(np.mean(arr))
-                sd = float(np.std(arr))
+                sd = float(np.std(arr, ddof=1)) if len(arr) > 1 else 1.0
                 self._stress_stats[col] = (mu, sd if sd > 1e-8 else 1.0)
 
         raw = self._base.predict_quantiles(cal_df)

@@ -7,6 +7,8 @@ from pathlib import Path
 import matplotlib
 import polars as pl
 
+from previsao_leitos.audit.data_hygiene import DataHygieneScorecard
+from previsao_leitos.audit.hypothesis_ledger import RatchetEvaluation
 from previsao_leitos.readiness.simulator import CounterfactualReadinessComparison
 
 matplotlib.use("Agg")
@@ -28,6 +30,7 @@ def plot_c1_counterfactual_trajectory(
     target_label: str,
     output_path: Path,
     week_range: tuple[int, int] = (10, 35),
+    eval_year: int = 2024,
 ) -> Path:
     """Fig. C1: Observado vs. Contrafactual Sem Enchente (IC 95%) vs. Previsão Ex-Ante (P10-P90)."""
     sub = series_df.filter(pl.col("target_semana_epi").is_between(week_range[0], week_range[1]))
@@ -86,7 +89,7 @@ def plot_c1_counterfactual_trajectory(
         ax.grid(alpha=0.25)
 
     axes_list[0].legend(loc="upper right", fontsize=8, ncol=2)
-    axes_list[-1].set_xlabel("Semana Epidemiológica ISO (2024)")
+    axes_list[-1].set_xlabel(f"Semana Epidemiológica ISO ({eval_year})")
     fig.suptitle(
         f"Fig. C1 — Trajetória Observada vs. Contrafactual Sem Enchente ({target_label})",
         fontsize=12,
@@ -311,6 +314,95 @@ def plot_c5_simpy_contingency(
     ax2.legend(fontsize=8.5, loc="lower right")
     ax2.grid(alpha=0.25)
 
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c6_hygiene_scorecard(
+    scorecard: DataHygieneScorecard,
+    *,
+    output_path: Path,
+) -> Path:
+    """Fig. C6: Painel visual de auditoria dos gates de higiene de dados (G1-G8)."""
+    gates = scorecard.gates
+    labels = [f"{g.gate_id}: {g.name}" for g in gates]
+    status_score = {"PASS": 1.0, "WARN": 0.5, "FAIL": 0.0}
+    status_color = {"PASS": _COLOR_NEG, "WARN": _COLOR_BAND, "FAIL": _COLOR_MODEL}
+
+    y_pos = list(range(len(gates)))
+    vals = [status_score[g.status] for g in gates]
+    colors = [status_color[g.status] for g in gates]
+
+    fig, ax = plt.subplots(figsize=(10.2, max(3.6, 0.55 * len(gates) + 1.4)))
+    ax.barh(y_pos, [1.0] * len(gates), color="#EEEEEE", edgecolor="#CCCCCC", height=0.6)
+    ax.barh(y_pos, vals, color=colors, edgecolor="#222222", height=0.6)
+
+    for idx, gate in enumerate(gates):
+        txt = (
+            f"[{gate.status}] obs={gate.observed_value:.3g} {gate.unit} "
+            f"(lim <= {gate.threshold:.3g})"
+        )
+        ax.text(1.03, idx, txt, va="center", ha="left", fontsize=8.5, fontweight="bold")
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=8.5)
+    ax.invert_yaxis()
+    ax.set_xlim(0.0, 1.85)
+    ax.set_xticks([0.0, 0.5, 1.0])
+    ax.set_xticklabels(["FAIL", "WARN", "PASS"])
+    ax.set_title(
+        f"Fig. C6 — Scorecard de Higiene de Dados Cruzados (Status: {scorecard.overall_status})",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+    ax.grid(axis="x", alpha=0.25)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c7_ablation_delta(
+    evaluation: RatchetEvaluation,
+    *,
+    output_path: Path,
+) -> Path:
+    """Fig. C7: Delta percentual Champion vs. Challenger na catraca científica."""
+    metrics = list(evaluation.ablation_delta.keys())
+    deltas_pct = [evaluation.ablation_delta[m]["delta_pct"] for m in metrics]
+    higher_is_better = {"coverage_p90", "interior_specificity"}
+    colors = [
+        _COLOR_NEG
+        if ((m in higher_is_better and d >= 0.0) or (m not in higher_is_better and d <= 0.0))
+        else _COLOR_MODEL
+        for m, d in zip(metrics, deltas_pct, strict=True)
+    ]
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.4))
+    y_pos = list(range(len(metrics)))
+    ax.axvline(0.0, color=_COLOR_REAL, linestyle="--", linewidth=1.2)
+    ax.barh(y_pos, deltas_pct, color=colors, edgecolor="#222222", height=0.55)
+    for idx, val in enumerate(deltas_pct):
+        ha = "left" if val >= 0.0 else "right"
+        offset = 0.8 if val >= 0.0 else -0.8
+        ax.text(val + offset, idx, f"{val:+.2f}%", va="center", ha=ha, fontsize=8.5)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(metrics, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel("Variação Percentual Challenger vs. Champion (%)")
+    ax.set_title(
+        f"Fig. C7 — Ablação Champion-Challenger ({evaluation.decision}: "
+        f"{evaluation.challenger_run_id} vs. {evaluation.champion_run_id})",
+        fontsize=11.0,
+        fontweight="bold",
+    )
+    ax.margins(x=0.18)
+    ax.grid(axis="x", alpha=0.25)
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")

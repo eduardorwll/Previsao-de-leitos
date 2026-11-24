@@ -28,3 +28,4 @@
 - [x] Integrar tabela de Net Benefit e seção **TRIPOD+AI / PROBAST+AI / RECORD** em `audit/report_builder.py`
 - [x] Implementar `cli/logging_json.py` e `cli/main.py` (`previsao-leitos doctor` e `previsao-leitos verify-rs`) com bloqueio físico de `2025`
 - [x] Registrar script `previsao-leitos` em `pyproject.toml` e validar fim a fim com testes *Prove-It*
+- [x] Corrigir rótulo de surto em `cli/main.py` via `compute_surge_flags` (eliminando falsos positivos `0.0 >= 0.0`) e acoplar compilação automática do dossiê `.md` + `.pdf` (`dossier_compiler.py`) com espelhamento do Campeão em `~/Downloads/` ao final de `verify-rs`

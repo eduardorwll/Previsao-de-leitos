@@ -119,6 +119,7 @@ def build_verification_report(
         entity_col=entity_col,
         target_label=target_label,
         output_path=fig_dir / "fig_c1_trajetoria_contrafactual.png",
+        eval_year=eval_year,
     )
     fig_c2 = plot_c2_shock_excess_accuracy(
         counterfactual_report.series_df,

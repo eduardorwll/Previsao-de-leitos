@@ -16,6 +16,12 @@ from previsao_leitos.audit import (
     NoFloodSyntheticControl,
     brier_skill_score,
     build_verification_report,
+    check_g1_collinearity_vif,
+    check_g4_right_censoring,
+    check_g8_degenerate_surge_labels,
+    compile_execution_dossier,
+    compile_hygiene_scorecard,
+    compute_surge_flags,
     decision_curve_net_benefit,
     decompose_intermunicipal_and_landfill_effect,
     estimate_surge_probability_from_quantiles,
@@ -181,15 +187,30 @@ def _cmd_verify_rs(args: argparse.Namespace) -> int:
         ]
     )
 
-    # Net Benefit / ECE / BSS sobre evento de sobrecarga (> 110% da média causal de 12 semanas)
-    surge_thr = 1.10 * sp_eval.eval_df["y_roll12"].to_numpy().astype(np.float64)
-    y_surge = (sp_eval.eval_df["target_y"].to_numpy().astype(np.float64) >= surge_thr).astype(
-        np.float64
-    )
+    # Net Benefit / ECE / BSS sobre evento de sobrecarga (> 110% da média causal, sem 0.0 >= 0.0)
+    y_true_arr = sp_eval.eval_df["target_y"].to_numpy().astype(np.float64)
+    y_roll12_arr = sp_eval.eval_df["y_roll12"].to_numpy().astype(np.float64)
+    surge_thr = 1.10 * np.maximum(y_roll12_arr, 1e-6)
+    y_surge = compute_surge_flags(y_true_arr, y_roll12_arr, multiplier=1.10)
     p_surge = estimate_surge_probability_from_quantiles(cal_preds, surge_thr)
     ece_val = expected_calibration_error(y_surge, p_surge, n_bins=8)
     bss_val = brier_skill_score(y_surge, p_surge)
     dca_df = decision_curve_net_benefit(y_surge, p_surge)
+
+    hygiene_gates = [check_g8_degenerate_surge_labels(y_true_arr, y_roll12_arr, y_surge)]
+    if "chuva_sem_mm" in panel.columns and "chuva_catchment_mm" in panel.columns:
+        hygiene_gates.append(
+            check_g1_collinearity_vif(panel, ["chuva_sem_mm", "chuva_catchment_mm"])
+        )
+    if "ano_epi" in panel.columns and "semana_epi" in panel.columns:
+        panel_with_t = panel.with_columns(
+            (pl.col("ano_epi") * 100 + pl.col("semana_epi")).alias("_ano_sem")
+        )
+        if panel_with_t["_ano_sem"].n_unique() >= 20:
+            hygiene_gates.append(
+                check_g4_right_censoring(panel_with_t, time_col="_ano_sem", value_col=target_col)
+            )
+    hygiene_scorecard = compile_hygiene_scorecard(hygiene_gates)
 
     sc = NoFloodSyntheticControl(donor_entities=_DONOR_REGIONS, train_end_year=2022).fit(
         panel, entity_col="nome_regiao_saude", target_col=target_col
@@ -287,16 +308,34 @@ def _cmd_verify_rs(args: argparse.Namespace) -> int:
         simpy_comparison=sim_comp,
         net_benefit_df=dca_df,
     )
+    dossier = compile_execution_dossier(
+        runs_root=Path(args.runs_root),
+        run_id=run_id,
+        eval_year=eval_year,
+        target_label=f"{target_col} (RS {eval_year})",
+        benchmark_table=bench_df,
+        hygiene_scorecard=hygiene_scorecard,
+        extra_figures=artifacts.figure_paths,
+        extra_notes=(
+            f"ECE_surge={ece_val:.4f} | BSS_surge={bss_val:+.4f}",
+            f"Violação monotônica = {cf_rep.monotonic_violation_rate:.4f}",
+        ),
+        seed=seed,
+        mirror_champion=not bool(args.no_mirror_downloads),
+    )
     emit_json_log(
         run_id=run_id,
         entry_point="cli:verify-rs",
         event="verification_complete",
         payload={
             "report_path": str(artifacts.report_path),
-            "n_figures": len(artifacts.figure_paths),
+            "dossier_md_path": str(dossier.markdown_path),
+            "dossier_pdf_path": str(dossier.pdf_path),
+            "n_figures": len(dossier.figure_paths),
             "ece_surge": round(ece_val, 4),
             "bss_surge": round(bss_val, 4),
             "monotonic_violation_rate": cf_rep.monotonic_violation_rate,
+            "hygiene_overall_status": hygiene_scorecard.overall_status,
         },
     )
     return 0
@@ -323,9 +362,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="data/processed/rs_painel_semanal_regioes_v2.parquet",
     )
     p_ver.add_argument("--output-dir", type=str, default="reports/cli_rs_verify")
+    p_ver.add_argument("--runs-root", type=str, default="reports/runs")
     p_ver.add_argument("--run-id", type=str, default="")
     p_ver.add_argument("--seed", type=int, default=42)
     p_ver.add_argument("--allow-holdout", action="store_true", default=False)
+    p_ver.add_argument("--no-mirror-downloads", action="store_true", default=False)
     return parser
 
 

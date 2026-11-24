@@ -8,6 +8,10 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F06.1 + F07.1 (`audit/dossier_compiler.py` + `plots.py` + `cli/main.py` — Dossiê Automático `.md`/`.pdf` e Correções Forenses):**
+  - Implementado `src/previsao_leitos/audit/dossier_compiler.py` (`compile_execution_dossier` e `compute_surge_flags`) emitindo automaticamente `relatorio_execucao_completo.md`, `relatorio_execucao_completo.pdf` (via Chromium headless com fallback `PdfPages`), `data_hygiene_scorecard.json`, `ablation_delta.json` e `run_manifest.json` em `reports/runs/<run_id>/`, com espelhamento atômico do Campeão em `~/Downloads/`.
+  - Adicionadas **`Fig. C6`** (`plot_c6_hygiene_scorecard`) e **`Fig. C7`** (`plot_c7_ablation_delta`) em `audit/plots.py` e parâmetro dinâmico `eval_year` na `Fig. C1` (removendo o rótulo fixo `(2024)`).
+  - Corrigidos o bug `0.0 >= 0.0` em `cli/main.py` (via `compute_surge_flags`, zerando falsos surtos em semanas nulas) e o estimador de desvio-padrão para `ddof=1` em `audit/counterfactual.py` e `demand/calibration.py`.
 - **Etapa 3 / Feature F06.1 (`audit/hypothesis_ledger.py` — Registro de Hipóteses e Catraca *Champion-Challenger*):**
   - Implementados `ModelScorecard`, `RatchetCriteria`, `ChampionChallengerRatchet`, `HypothesisEntry` e `HypothesisLedger` em `src/previsao_leitos/audit/hypothesis_ledger.py`, com travas não negociáveis (zero violações monotônicas, zero falhas de higiene `G1–G8`, piso de cobertura $P_{90}$ e piso de especificidade no interior) e persistência atômica de `hypothesis_ledger.json` e `ablation_delta.json`.
   - Cobertura unitária adicionada em `tests/unit/test_audit_hypothesis_ledger.py`.

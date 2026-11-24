@@ -100,7 +100,7 @@ class NoFloodSyntheticControl:
             coef = np.linalg.solve(x_don.T @ x_don + reg, x_don.T @ y_ent)
             res = y_ent - (x_don @ coef)
             self._weights[ent] = coef
-            self._res_sd[ent] = float(np.std(res))
+            self._res_sd[ent] = float(np.std(res, ddof=1)) if len(res) > 1 else 0.0
         return self
 
     def _design_matrix(self, df: pl.DataFrame) -> np.ndarray:

@@ -20,6 +20,11 @@ from previsao_leitos.audit.data_hygiene import (
     check_g8_degenerate_surge_labels,
     compile_hygiene_scorecard,
 )
+from previsao_leitos.audit.dossier_compiler import (
+    DossierArtifacts,
+    compile_execution_dossier,
+    compute_surge_flags,
+)
 from previsao_leitos.audit.hypothesis_ledger import (
     ChampionChallengerRatchet,
     HypothesisEntry,
@@ -47,6 +52,8 @@ from previsao_leitos.audit.plots import (
     plot_c3_placebo_validation,
     plot_c4_intermunicipal_landfill_waterfall,
     plot_c5_simpy_contingency,
+    plot_c6_hygiene_scorecard,
+    plot_c7_ablation_delta,
 )
 from previsao_leitos.audit.report_builder import (
     DatasetAuditEntry,
@@ -60,6 +67,7 @@ __all__ = [
     "CounterfactualAccuracyReport",
     "DataHygieneScorecard",
     "DatasetAuditEntry",
+    "DossierArtifacts",
     "HygieneGateResult",
     "HygieneStatus",
     "HypothesisEntry",
@@ -82,7 +90,9 @@ __all__ = [
     "check_g6_spatial_grid_collision",
     "check_g7_sutva_donor_purity",
     "check_g8_degenerate_surge_labels",
+    "compile_execution_dossier",
     "compile_hygiene_scorecard",
+    "compute_surge_flags",
     "decision_curve_net_benefit",
     "decompose_intermunicipal_and_landfill_effect",
     "empirical_coverage",
@@ -96,4 +106,6 @@ __all__ = [
     "plot_c3_placebo_validation",
     "plot_c4_intermunicipal_landfill_waterfall",
     "plot_c5_simpy_contingency",
+    "plot_c6_hygiene_scorecard",
+    "plot_c7_ablation_delta",
 ]
