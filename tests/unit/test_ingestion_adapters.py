@@ -184,6 +184,19 @@ def test_all_rs_query_specs_use_named_parameters_only() -> None:
             assert f"@{param.name}" in spec.sql
         assert "SELECT *" not in spec.sql.upper()
 
+    # Prove-It: dicionário oficial CNES e SIH
+    hosp_sql = specs[0].sql
+    beds_sql = specs[1].sql
+    sih_sql = specs[2].sql
+    flows_sql = specs[3].sql
+    assert "'5'" in hosp_sql
+    assert "('74', '75', '76', '83', '85', '86') THEN 'uti_adulto'" in beds_sql
+    assert "('77', '78', '79') THEN 'uti_pediatrica'" in beds_sql
+    assert "STARTS_WITH(id_municipio_estabelecimento, @uf_code)" in sih_sql
+    assert "STARTS_WITH(id_municipio_estabelecimento, @uf_code)" in flows_sql
+    assert "tipo_uti IN ('51', '74', '75', '76', '83', '85', '86') THEN 'uti_adulto'" in sih_sql
+    assert "COALESCE(cid_principal_subcategoria, cid_principal_categoria)" in sih_sql
+
 
 def test_schema_validators_preserve_leading_zeros_and_enforce_bounds() -> None:
     df_hosp = pl.DataFrame(

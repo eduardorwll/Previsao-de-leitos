@@ -2,12 +2,12 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| **Status** | ✅ Implementada (Fatia 1A.1 — pronta para extração real RS) |
+| **Status** | ✅ Concluída e Validada em Dados Reais RS (`2010–2025`) |
 | **Etapa** | Etapa 1 — Trilha 1A (Núcleo Semanal RS) |
 | **Especificação** | [spec/SPEC-ingestion.md](../../spec/SPEC-ingestion.md) |
 | **Guia de Setup** | [docs/runbooks/setup-bigquery.md](../runbooks/setup-bigquery.md) |
 | **Pacote** | `src/previsao_leitos/ingestion/` |
-| **Testes** | `38/38` offline + `1/1` live BigQuery 0-byte (`90%+` cobertura) |
+| **Testes** | `39/39` offline (`88%+` cobertura) + `1/1` live BigQuery 0-byte |
 
 ---
 
@@ -29,4 +29,5 @@ Para responder à pergunta central do projeto — *"diante de uma enchente nesta
 - [x] Aprovar `spec/SPEC-ingestion.md`
 - [x] Implementar `ports.py`, `adapters.py` (`BigQueryAdapter` + `ParquetFixtureAdapter`), `cache.py`, `lgpd.py`, `schemas.py`, `queries.py` e `pipeline.py` em TDD
 - [x] Validar 100% da suíte offline (`pytest -m "not slow and not bigquery"`) com cobertura $\ge 80\%$ e validar sintaxe/colunas reais das 5 queries RS via `dry_run` gratuito (`0 bytes` cobrados) no BigQuery
-- [ ] Executar extração real RS (`2010–2025`) e auditar cobertura temporal pública (RLS `basedosdados`) + manifesto gerado
+- [x] Corrigir códigos oficiais via `br_ms_cnes.dicionario` (`'5'` = hospital de ensino, `'86'` = UCO III adulto, `'64'/'65'` = UCI) e `br_ms_sih.dicionario` (`STARTS_WITH(id_municipio_estabelecimento, @uf_code)`, `tipo_uti` por tipo de UTI e `COALESCE(cid_principal_subcategoria, cid_principal_categoria)`)
+- [x] Executar extração real RS (`2010–2025`) em cache local `data/raw/` (497 mun., 30 Regiões de Saúde, 44 hospitais-escola ativos em mai/2024, cobertura integral 2010–2025 no CNES e SIH-SUS) e implementar `aggregate_regional_weekly_demand` com supressão LGPD ($n < 5$)

@@ -10,6 +10,7 @@ from previsao_leitos.domain import parse_codigo_uf
 from previsao_leitos.ingestion import (
     IngestionConfig,
     ParquetFixtureAdapter,
+    aggregate_regional_weekly_demand,
     extract_rs_core_health_pack,
 )
 
@@ -109,3 +110,55 @@ def test_rs_core_health_pack_runs_end_to_end_offline_with_cache_and_lgpd(tmp_pat
     assert first_run["sih_demanda_semanal_agg"].manifest.suppressed_cells >= 2
     assert first_run["sih_demanda_semanal_agg"].manifest.cache_hit is False
     assert second_run["sih_demanda_semanal_agg"].manifest.cache_hit is True
+
+
+def test_regional_aggregation_preserves_wave2_signal_and_enforces_lgpd() -> None:
+    sih_df = pl.DataFrame(
+        {
+            "id_estabelecimento_cnes": ["2237601", "2237253", "2237601", "2244306"],
+            "ano_epi": [2024, 2024, 2024, 2024],
+            "semana_epi": [21, 21, 21, 21],
+            "especialidade": ["clinico", "clinico", "uti_adulto", "clinico"],
+            "grupo_cid": ["leptospirose", "leptospirose", "respiratorio", "leptospirose"],
+            "carater_atendimento": ["urgencia", "urgencia", "urgencia", "urgencia"],
+            "internacoes": [3, 4, 20, 2],
+            "dias_permanencia_total": [21, 28, 160, 14],
+            "diarias_uti_total": [6, 8, 90, 0],
+            "obitos": [0, 1, 2, 0],
+            "altas_vivas": [3, 3, 18, 2],
+        }
+    )
+    hosp_df = pl.DataFrame(
+        {
+            "id_estabelecimento_cnes": ["2237601", "2237253", "2244306"],
+            "id_municipio": ["4314902", "4314902", "4316907"],
+            "is_hospital_ensino": [True, True, True],
+        }
+    )
+    ibge_df = pl.DataFrame(
+        {
+            "id_municipio": ["4314902", "4316907"],
+            "nome_regiao_saude": ["Regiao 10 - Capital", "Regiao 01 - Verdes Campos"],
+        }
+    )
+
+    regional = aggregate_regional_weekly_demand(
+        sih_df=sih_df,
+        hospitals_df=hosp_df,
+        ibge_df=ibge_df,
+        group_by_col="grupo_cid",
+        only_teaching_hospitals=True,
+        min_cell_count=5,
+    )
+
+    # Na Capital, 3 + 4 = 7 (>= 5) preserva sinal de leptospirose; em Verdes Campos, 2 < 5 -> None
+    cap_lepto = regional.filter(
+        (pl.col("nome_regiao_saude") == "Regiao 10 - Capital")
+        & (pl.col("grupo_cid") == "leptospirose")
+    )["internacoes"].to_list()
+    sm_lepto = regional.filter(
+        (pl.col("nome_regiao_saude") == "Regiao 01 - Verdes Campos")
+        & (pl.col("grupo_cid") == "leptospirose")
+    )["internacoes"].to_list()
+    assert cap_lepto == [7]
+    assert sm_lepto == [None]

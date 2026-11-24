@@ -7,7 +7,10 @@ from previsao_leitos.ingestion.lgpd import (
     suppress_small_cells,
     validate_no_pii_columns,
 )
-from previsao_leitos.ingestion.pipeline import extract_rs_core_health_pack
+from previsao_leitos.ingestion.pipeline import (
+    aggregate_regional_weekly_demand,
+    extract_rs_core_health_pack,
+)
 from previsao_leitos.ingestion.ports import (
     UF_CODE_TO_SIGLA,
     IngestionConfig,
@@ -36,6 +39,7 @@ __all__ = [
     "QueryParam",
     "QuerySpec",
     "TabularSourcePort",
+    "aggregate_regional_weekly_demand",
     "build_cnes_beds_by_specialty_query",
     "build_cnes_teaching_hospitals_query",
     "build_ibge_municipios_query",

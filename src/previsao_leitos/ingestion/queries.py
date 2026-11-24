@@ -24,7 +24,7 @@ SELECT
     est.tipo_unidade,
     (
         ens.id_estabelecimento_cnes IS NOT NULL
-        OR est.tipo_atividade_ensino_pesquisa IN ('1', '2', '3')
+        OR est.tipo_atividade_ensino_pesquisa IN ('1', '2', '3', '5')
     ) AS is_hospital_ensino
 FROM `basedosdados.br_ms_cnes.estabelecimento` AS est
 LEFT JOIN ensino AS ens
@@ -44,10 +44,10 @@ SELECT
     ano,
     mes,
     CASE
-        WHEN tipo_especialidade_leito IN ('74', '75', '76', '85') THEN 'uti_adulto'
-        WHEN tipo_especialidade_leito IN ('77', '78', '79', '86') THEN 'uti_pediatrica'
+        WHEN tipo_especialidade_leito IN ('74', '75', '76', '83', '85', '86') THEN 'uti_adulto'
+        WHEN tipo_especialidade_leito IN ('77', '78', '79') THEN 'uti_pediatrica'
         WHEN tipo_especialidade_leito IN ('80', '81', '82') THEN 'uti_neonatal'
-        WHEN tipo_especialidade_leito IN ('92', '93', '94', '95', '96') THEN 'uci'
+        WHEN tipo_especialidade_leito IN ('64', '65', '92', '93', '94', '95') THEN 'uci'
         WHEN tipo_leito = '1' THEN 'cirurgico'
         WHEN tipo_leito = '2' THEN 'clinico'
         WHEN tipo_leito = '4' THEN 'obstetrico'
@@ -69,29 +69,49 @@ GROUP BY
 """
 
 _SQL_SIH_WEEKLY_DEMAND = """
+WITH base AS (
+    SELECT
+        id_estabelecimento_cnes,
+        EXTRACT(ISOYEAR FROM data_internacao) AS ano_epi,
+        EXTRACT(ISOWEEK FROM data_internacao) AS semana_epi,
+        tipo_uti,
+        especialidade_leito,
+        LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3) AS cid3,
+        carater_internacao,
+        quantidade_dias_permanencia,
+        quantidade_dias_uti_mes,
+        indicador_obito
+    FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+    WHERE ano BETWEEN @ano_inicio AND @ano_fim
+      AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
+      AND data_internacao IS NOT NULL
+      AND id_estabelecimento_cnes IS NOT NULL
+)
 SELECT
     id_estabelecimento_cnes,
-    EXTRACT(ISOYEAR FROM data_internacao) AS ano_epi,
-    EXTRACT(ISOWEEK FROM data_internacao) AS semana_epi,
+    ano_epi,
+    semana_epi,
     CASE
-        WHEN especialidade_leito = '01' THEN 'cirurgico'
-        WHEN especialidade_leito = '02' THEN 'obstetrico'
-        WHEN especialidade_leito = '03' THEN 'clinico'
-        WHEN especialidade_leito = '07' THEN 'pediatrico'
+        WHEN tipo_uti IN ('51', '74', '75', '76', '83', '85', '86') THEN 'uti_adulto'
+        WHEN tipo_uti IN ('52', '77', '78', '79') THEN 'uti_pediatrica'
+        WHEN tipo_uti IN ('80', '81', '82') THEN 'uti_neonatal'
+        WHEN especialidade_leito IN ('1', '01') THEN 'cirurgico'
+        WHEN especialidade_leito IN ('2', '02') THEN 'obstetrico'
+        WHEN especialidade_leito IN ('3', '03') THEN 'clinico'
+        WHEN especialidade_leito IN ('7', '07') THEN 'pediatrico'
         ELSE 'outros'
     END AS especialidade,
     CASE
-        WHEN cid_principal_categoria = 'A27' THEN 'leptospirose'
-        WHEN cid_principal_categoria BETWEEN 'A00' AND 'A09'
-          OR cid_principal_categoria = 'B15' THEN 'infecciosas_hidricas'
-        WHEN cid_principal_categoria BETWEEN 'S00' AND 'T98' THEN 'trauma'
-        WHEN cid_principal_categoria BETWEEN 'J00' AND 'J99' THEN 'respiratorio'
-        WHEN cid_principal_categoria BETWEEN 'I00' AND 'I99'
-          OR cid_principal_categoria BETWEEN 'N17' AND 'N19' THEN 'cardiovascular_renal'
+        WHEN cid3 = 'A27' THEN 'leptospirose'
+        WHEN cid3 BETWEEN 'A00' AND 'A09' OR cid3 = 'B15' THEN 'infecciosas_hidricas'
+        WHEN cid3 BETWEEN 'S00' AND 'T98' THEN 'trauma'
+        WHEN cid3 BETWEEN 'J00' AND 'J99' THEN 'respiratorio'
+        WHEN cid3 BETWEEN 'I00' AND 'I99' OR cid3 BETWEEN 'N17' AND 'N19'
+            THEN 'cardiovascular_renal'
         ELSE 'outros'
     END AS grupo_cid,
     CASE
-        WHEN carater_internacao = '01' THEN 'eletivo'
+        WHEN carater_internacao IN ('1', '01') THEN 'eletivo'
         ELSE 'urgencia'
     END AS carater_atendimento,
     COUNT(*) AS internacoes,
@@ -99,11 +119,7 @@ SELECT
     SUM(IFNULL(quantidade_dias_uti_mes, 0)) AS diarias_uti_total,
     SUM(IF(indicador_obito = 1, 1, 0)) AS obitos,
     SUM(IF(indicador_obito = 1, 0, 1)) AS altas_vivas
-FROM `basedosdados.br_ms_sih.aihs_reduzidas`
-WHERE ano BETWEEN @ano_inicio AND @ano_fim
-  AND sigla_uf = @uf_int
-  AND data_internacao IS NOT NULL
-  AND id_estabelecimento_cnes IS NOT NULL
+FROM base
 GROUP BY
     id_estabelecimento_cnes,
     ano_epi,
@@ -122,7 +138,7 @@ SELECT
     COUNT(*) AS internacoes
 FROM `basedosdados.br_ms_sih.aihs_reduzidas`
 WHERE ano BETWEEN @ano_inicio AND @ano_fim
-  AND sigla_uf = @uf_int
+  AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
   AND data_internacao IS NOT NULL
   AND id_estabelecimento_cnes IS NOT NULL
   AND id_municipio_paciente IS NOT NULL
@@ -162,7 +178,7 @@ def build_cnes_teaching_hospitals_query(
             QueryParam("ano_inicio", "INT64", ano_inicio),
             QueryParam("ano_fim", "INT64", ano_fim),
         ),
-        schema_version="v1",
+        schema_version="v2",
         expected_columns=(
             "id_estabelecimento_cnes",
             "id_municipio",
@@ -187,7 +203,7 @@ def build_cnes_beds_by_specialty_query(
             QueryParam("ano_inicio", "INT64", ano_inicio),
             QueryParam("ano_fim", "INT64", ano_fim),
         ),
-        schema_version="v1",
+        schema_version="v2",
         expected_columns=(
             "id_estabelecimento_cnes",
             "id_municipio",
@@ -206,11 +222,11 @@ def build_sih_weekly_demand_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: int
         name="sih_demanda_semanal_agg",
         sql=_SQL_SIH_WEEKLY_DEMAND,
         params=(
-            QueryParam("uf_int", "INT64", int(str(uf))),
+            QueryParam("uf_code", "STRING", str(uf)),
             QueryParam("ano_inicio", "INT64", ano_inicio),
             QueryParam("ano_fim", "INT64", ano_fim),
         ),
-        schema_version="v1",
+        schema_version="v3",
         expected_columns=(
             "id_estabelecimento_cnes",
             "ano_epi",
@@ -233,11 +249,11 @@ def build_sih_referral_flows_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: in
         name="sih_fluxos_referencia_semanal",
         sql=_SQL_SIH_REFERRAL_FLOWS,
         params=(
-            QueryParam("uf_int", "INT64", int(str(uf))),
+            QueryParam("uf_code", "STRING", str(uf)),
             QueryParam("ano_inicio", "INT64", ano_inicio),
             QueryParam("ano_fim", "INT64", ano_fim),
         ),
-        schema_version="v1",
+        schema_version="v2",
         expected_columns=(
             "id_municipio_residencia_6d",
             "id_estabelecimento_cnes",

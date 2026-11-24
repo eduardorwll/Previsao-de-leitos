@@ -111,7 +111,7 @@ def extract_rs_core_health_pack(
                 uf=config.uf, ano_inicio=config.ano_inicio, ano_fim=config.ano_fim
             ),
             validate_sih_weekly_demand_frame,
-            ("internacoes", "obitos", "altas_vivas"),
+            ("internacoes", "obitos", "altas_vivas") if config.suppress_demand_microstrata else (),
             ("id_estabelecimento_cnes", "ano_epi", "semana_epi"),
         ),
         (
@@ -144,3 +144,56 @@ def extract_rs_core_health_pack(
             lgpd_stratum_columns=lgpd_strata,
         )
     return results
+
+
+def aggregate_regional_weekly_demand(
+    *,
+    sih_df: pl.DataFrame,
+    hospitals_df: pl.DataFrame,
+    ibge_df: pl.DataFrame,
+    group_by_col: str = "grupo_cid",
+    only_teaching_hospitals: bool = False,
+    min_cell_count: int = 5,
+) -> pl.DataFrame:
+    """Agrega demanda semanal SIH-SUS por Região de Saúde e aplica supressão LGPD (n < 5).
+
+    Preserva o sinal epidemiológico de agravos raros pós-enchente (como leptospirose) que
+    seriam apagados se suprimidos em micro-estratos de hospital isolado, garantindo conformidade
+    LGPD na tabela regional de divulgação.
+    """
+    hosp_map = (
+        hospitals_df.group_by("id_estabelecimento_cnes")
+        .agg(
+            pl.col("id_municipio").last().alias("id_municipio"),
+            pl.col("is_hospital_ensino").any().alias("is_hospital_ensino"),
+        )
+    )
+    reg_cols = ["id_municipio"]
+    if "nome_regiao_saude" in ibge_df.columns:
+        reg_cols.append("nome_regiao_saude")
+    reg_map = ibge_df.select(reg_cols).unique(subset=["id_municipio"])
+    if "nome_regiao_saude" not in reg_map.columns:
+        reg_map = reg_map.with_columns(pl.lit("NAO_INFORMADA").alias("nome_regiao_saude"))
+
+    joined = sih_df.join(hosp_map, on="id_estabelecimento_cnes", how="left").join(
+        reg_map, on="id_municipio", how="left"
+    )
+    if only_teaching_hospitals:
+        joined = joined.filter(pl.col("is_hospital_ensino").fill_null(False))
+
+    aggregated = (
+        joined.with_columns(pl.col("nome_regiao_saude").fill_null("NAO_INFORMADA"))
+        .group_by(["nome_regiao_saude", "ano_epi", "semana_epi", group_by_col])
+        .agg(
+            pl.col("internacoes").sum().alias("internacoes"),
+            pl.col("dias_permanencia_total").sum().alias("dias_permanencia_total"),
+            pl.col("diarias_uti_total").sum().alias("diarias_uti_total"),
+        )
+        .sort(["nome_regiao_saude", "ano_epi", "semana_epi", group_by_col])
+    )
+    return suppress_small_cells(
+        aggregated,
+        count_columns=("internacoes",),
+        stratum_columns=("nome_regiao_saude", "ano_epi", "semana_epi"),
+        min_cell_count=min_cell_count,
+    )

@@ -90,8 +90,15 @@ class BigQueryAdapter:
             use_query_cache=True,
         )
         job = self._client.query(spec.sql, job_config=run_cfg)
+        try:
+            arrow_table = job.to_arrow()
+        except Exception as exc:
+            if "bytesBilledLimitExceeded" in str(exc):
+                raise ConfigurationError(
+                    f"Consulta {spec.name!r} excedeu o teto servidor maximum_bytes_billed: {exc}"
+                ) from exc
+            raise
         self.last_bytes_processed: int = int(job.total_bytes_processed or 0)
-        arrow_table = job.to_arrow()
         result = pl.from_arrow(arrow_table)
         if not isinstance(result, pl.DataFrame):
             raise DataContractError(f"Retorno inesperado da consulta {spec.name!r}.")

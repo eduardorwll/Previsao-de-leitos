@@ -5,6 +5,15 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 ## [Unreleased]
 
 ### Added
+- **Etapa 1 / Feature F02 (`geo` — Especificação V1):** Especificação completa em `spec/SPEC-geo-hydro-etl.md` e documentação em `docs/features/02-geo-hidrologia-rs.md` (grade calendário 100% RS com `MERGE-CPTEC`, `ANA/Ottobacias` montante→jusante, `S2iD` e *Tracer Bullet* semanal $h=1..4$ semanas vs. Persistência).
+- **Agregação Regional LGPD (`ingestion`):** Adicionada `aggregate_regional_weekly_demand` preservando sinal de agravos raros pós-enchente (ex.: leptospirose) na escala de Região de Saúde com supressão LGPD ($n < 5$) aplicada na camada de divulgação.
+- **BigQuery Storage gRPC:** Adicionado `google-cloud-bigquery-storage` ao extra `[data]` em `pyproject.toml` para streaming Arrow de alta velocidade.
+
+### Fixed
+- **Códigos Oficiais CNES e SIH-SUS (`queries.py`):** Validação direta nos dicionários oficiais `br_ms_cnes.dicionario` e `br_ms_sih.dicionario`, corrigindo `tipo_atividade_ensino_pesquisa IN ('1','2','3','5')` (incluindo HCPA, Santa Casa, GHC e HUSM — `44` hospitais-escola ativos no RS em mai/2024), `tipo_especialidade_leito = '86'` (UCO III em `uti_adulto`), `'64'/'65'` em `uci`, filtro `STARTS_WITH(id_municipio_estabelecimento, @uf_code)` no SIH (`sigla_uf` é nulo na base), separação de `uti_adulto`/`uti_pediatrica`/`uti_neonatal` via `tipo_uti` e `LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)` para captura integral de CID-10 (leptospirose, respiratório e trauma).
+- **Observabilidade e Limite de Custo (`adapters.py`):** Leitura de `last_bytes_processed` após conclusão do job BigQuery e encapsulamento de `bytesBilledLimitExceeded` em `ConfigurationError`.
+
+### Added (Fatia 1A.1)
 - **Etapa 1 / Feature F01 (`ingestion` — Implementação TDD Fatia 1A.1):** Implementado módulo `src/previsao_leitos/ingestion/` (`ports.py`, `adapters.py`, `cache.py`, `lgpd.py`, `schemas.py`, `queries.py`, `pipeline.py`) com `BigQueryAdapter` parametrizado + `dry_run` RLS-aware, `ParquetFixtureAdapter` offline, cache Parquet atômico SHA-256, contratos `polars` preservando zeros à esquerda e supressão LGPD primária e complementar ($n < 5$).
 - **Testes & CI F01:** Adicionados 21 novos testes (`tests/unit/test_ingestion_*.py` e `tests/integration/test_ingestion_rs_pipeline.py` totalizando 38 testes offline com `89,4%` de cobertura) + teste ao vivo `0 bytes` (`tests/integration/test_bigquery_schema_live.py`) e atualizado `.github/workflows/ci.yml` com `--extra data`.
 - **Etapa 1 / Feature F01 (`ingestion` — Especificação V1):** Especificação completa em `spec/SPEC-ingestion.md` (costura `TabularSourcePort` com `BigQueryAdapter` parametrizado + `dry_run` + `ParquetFixtureAdapter`, cache atômico SHA-256, extração CNES por tipo específico de UTI e hospitais-escola, demanda semanal `SIH-SUS`/`SINAN` agregada com supressão LGPD $n < 5$), documentação da feature (`docs/features/01-ingestao-segura.md`) e guia seguro de acesso ao BigQuery sem chaves `.json` (`docs/runbooks/setup-bigquery.md`).

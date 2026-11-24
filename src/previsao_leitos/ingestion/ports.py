@@ -71,6 +71,7 @@ class IngestionConfig:
     data_dir: Path
     max_mb_scanned: int = 2000
     min_cell_count: int = 5
+    suppress_demand_microstrata: bool = True
 
     @property
     def max_bytes_billed(self) -> int:
