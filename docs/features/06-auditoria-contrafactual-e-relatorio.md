@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| **Status** | 🔄 Em evolução V1.1 (`Fig. C1–C5` + Sensores de Higiene `G1–G8` implementados) |
-| **Etapa** | Etapa 2–3 (F06 e evolução F06.1 — Higiene de Dados e Dossiê Automático) |
+| **Status** | 🔄 Em evolução V1.1 (`Fig. C1–C5` + Higiene `G1–G8` + Registro de Hipóteses e Catraca *Champion-Challenger*) |
+| **Etapa** | Etapa 2–3 (F06 e evolução F06.1 — Higiene de Dados, Catraca Científica e Dossiê Automático) |
 | **Especificação** | [spec/SPEC-audit-counterfactual-report.md](../../spec/SPEC-audit-counterfactual-report.md) · [ADR-0007](../adr/0007-counterfactual-analysis-and-verification-report.md) |
-| **Pacote Implementado** | `src/previsao_leitos/audit/` (`metrics.py`, `counterfactual.py`, `plots.py`, `report_builder.py`, `data_hygiene.py`) |
+| **Pacote Implementado** | `src/previsao_leitos/audit/` (`metrics.py`, `counterfactual.py`, `plots.py`, `report_builder.py`, `data_hygiene.py`, `hypothesis_ledger.py`) |
 
 ---
 
@@ -29,5 +29,5 @@ Garantir que toda verificação dos modelos produza um **Relatório Final de Ver
 - [x] Implementar `report_builder.py` (gerador automático de `reports/<run_id>/verificacao_cientifica.md` + `run_manifest.json`) com testes *Prove-It* e executar sobre RS 2024
 - [x] Acoplar **`Fig. C5`** (curva contrafactual de filas `SimPy` com acionamento `h=2` vs. `h=0`) e calibrar bandas sob choque em `2023` (`34,1% → 61,4%` em UTI 2024)
 - [x] Implementar `data_hygiene.py` (**Gates `G1–G8`**): sensores determinísticos de colinearidade (`VIF`), perda/explosão de join, conservação de censo diário vs. capacidade CNES, censura à direita nas semanas finais, diluição espacial MAUP, colisão de grade climática, pureza `SUTVA` de controles e trava anti-rótulo degenerado (`0 >= 0`), com scorecard `data_hygiene_scorecard.json`
-- [ ] Implementar `hypothesis_ledger.py` e catraca científica *Champion-Challenger* (`hypothesis_ledger.json`)
+- [x] Implementar `hypothesis_ledger.py` e catraca científica *Champion-Challenger* (`hypothesis_ledger.json`, `ablation_delta.json`, travas de monotonicidade, higiene, cobertura $P_{90}$ e especificidade no interior)
 - [ ] Implementar `dossier_compiler.py` (relatório completo `.md` + `.pdf` automático ao fim de cada treino + `Fig. C6–C7`)

@@ -20,6 +20,16 @@ from previsao_leitos.audit.data_hygiene import (
     check_g8_degenerate_surge_labels,
     compile_hygiene_scorecard,
 )
+from previsao_leitos.audit.hypothesis_ledger import (
+    ChampionChallengerRatchet,
+    HypothesisEntry,
+    HypothesisLedger,
+    HypothesisStatus,
+    ModelScorecard,
+    PromotionDecision,
+    RatchetCriteria,
+    RatchetEvaluation,
+)
 from previsao_leitos.audit.metrics import (
     BootstrapCI,
     block_bootstrap_ci,
@@ -46,12 +56,20 @@ from previsao_leitos.audit.report_builder import (
 
 __all__ = [
     "BootstrapCI",
+    "ChampionChallengerRatchet",
     "CounterfactualAccuracyReport",
     "DataHygieneScorecard",
     "DatasetAuditEntry",
     "HygieneGateResult",
     "HygieneStatus",
+    "HypothesisEntry",
+    "HypothesisLedger",
+    "HypothesisStatus",
+    "ModelScorecard",
     "NoFloodSyntheticControl",
+    "PromotionDecision",
+    "RatchetCriteria",
+    "RatchetEvaluation",
     "VerificationReportArtifacts",
     "block_bootstrap_ci",
     "brier_skill_score",
