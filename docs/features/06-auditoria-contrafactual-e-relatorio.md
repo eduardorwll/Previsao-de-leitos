@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 | :--- | :--- |
-| **Status** | ✅ Núcleo V1 Concluído (Controle Sintético, Placebo, `Fig. C1–C4` e Relatório de Verificação; falta apenas `Fig. C5 SimPy` na Etapa 3) |
+| **Status** | ✅ Concluída V1 RS (`Fig. C1–C5` completas + Relatório de Verificação + `run_manifest.json`) |
 | **Etapa** | Etapa 2–3 (F06 integrada à validação da F04) |
 | **Especificação** | [spec/SPEC-audit-counterfactual-report.md](../../spec/SPEC-audit-counterfactual-report.md) · [ADR-0007](../adr/0007-counterfactual-analysis-and-verification-report.md) |
 | **Pacote Implementado** | `src/previsao_leitos/audit/` (`metrics.py`, `counterfactual.py`, `plots.py`, `report_builder.py`) |
@@ -27,4 +27,4 @@ Garantir que toda verificação dos modelos produza um **Relatório Final de Ver
 - [x] Implementar `counterfactual.py` (`NoFloodSyntheticControl`, validação placebo, acurácia de excesso/timing e decomposição `do()` intermunicipal + aterros/remanso)
 - [x] Implementar `plots.py` (gráficos contrafactuais `Fig. C1–C4` em paleta *Okabe-Ito* WCAG 2.2, 300 DPI)
 - [x] Implementar `report_builder.py` (gerador automático de `reports/<run_id>/verificacao_cientifica.md` + `run_manifest.json`) com testes *Prove-It* e executar sobre RS 2024
-- [ ] Acoplar `Fig. C5` (curva contrafactual de filas `SimPy` com acionamento `h=2` vs. `h=0`) e calibrar cobertura de choque ($34\% \to \ge 80\%$) na Etapa 3 (`PyMC` / conformal em `2023`)
+- [x] Acoplar **`Fig. C5`** (curva contrafactual de filas `SimPy` com acionamento `h=2` vs. `h=0`) e calibrar bandas sob choque em `2023` (`34,1% → 61,4%` em UTI 2024)

@@ -18,6 +18,7 @@ from previsao_leitos.audit.plots import (
     plot_c2_shock_excess_accuracy,
     plot_c3_placebo_validation,
     plot_c4_intermunicipal_landfill_waterfall,
+    plot_c5_simpy_contingency,
 )
 from previsao_leitos.audit.report_builder import (
     DatasetAuditEntry,
@@ -42,4 +43,5 @@ __all__ = [
     "plot_c2_shock_excess_accuracy",
     "plot_c3_placebo_validation",
     "plot_c4_intermunicipal_landfill_waterfall",
+    "plot_c5_simpy_contingency",
 ]

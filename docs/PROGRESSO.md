@@ -13,7 +13,7 @@
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
 | **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | 🔄 Em andamento | `65%` | Modelo *ex-ante* supera Persistência/Sazonal-Ingênuo (`F04` concluída + auditoria contrafactual `F06` ativa) + `HydroFiLMMonotonicNet` (`F03`) |
-| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `35%` | **V1 RS validada** no holdout intocado `2025` + `PyMC`/`SimPy` (`Fig. C5`) + plano de gatilhos para hospitais-escola |
+| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento | `70%` | **V1 RS validada** no holdout intocado `2025` (`F05 SimPy` + `Conformal 2023` + `Fig. C1–C5` concluídas; falta `PyMC`/`SHAP` e auditoria única `2025`) |
 | **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
 | **Etapa 5** | Governança TRIPOD+AI / RECORD, Publicação e Release `v1.0.0` | ⏳ Planejada | `0%` | Checklists completos, reprodutibilidade fim a fim e relatório técnico aberto |
 
@@ -28,8 +28,8 @@
 | **F02 — Geoespacial, Hidrologia 100% RS, Aterros e Intermunicipal (`geo`)** | [02-geo-hidrologia-rs.md](features/02-geo-hidrologia-rs.md) | ✅ Concluída (F02 + F02.1) | Grade calendário sem lacunas, DAG ponderado com tempo de trânsito e remanso (`V10M`), exposição causal de áreas aterradas/pôlderes (`MapBiomas <= 2022`), grafo assistencial `W_ref` (`1,78M` fluxos SIH) e ablação RS 2024 (`Leptospirose POA MASE 0,704`; `UTI Sul 0,900`) |
 | **F03 — Hidrologia Calibrada (`hydrology`)** | *(a criar na Etapa 2)* | ⏳ Planejada | Grade diária sem lacunas, `HydroFiLMMonotonicNet` (RS) e `HydroTFTNet` (BR) com monotonicidade real e calibração pós-hoc (ECE/BSS) |
 | **F04 — Demanda de Internações e Tempo de Permanência (`demand`)** | [04-demanda-e-los.md](features/04-demanda-e-los.md) | ✅ Concluída (V1 RS) | Modelos globais nas 30 Regiões RS (`QuantileGBDT` monotônico exato `0,00%` viol., `NegBinHurdle` para Onda 2 Leptospirose `MASE 0,710`, `PooledRidge` UTI `MASE 0,817`) + `SpecialtyLosEstimator` causal (`<= 2022`) |
-| **F05 — Prontidão, Filas Hospitalares e Otimização (`readiness`)** | *(a criar na Etapa 3)* | ⏳ Planejada | Simulador de filas de emergência/enfermaria/UTI (`SimPy`), explicabilidade `SHAP`, cenários de estresse composto e alocação multiobjetivo (`pymoo` na V2) |
-| **F06 — Auditoria Estatística, Análise Contrafactual e Relatório (`audit`)** | [06-auditoria-contrafactual-e-relatorio.md](features/06-auditoria-contrafactual-e-relatorio.md) | ✅ Núcleo V1 (`C1–C4`) | Controle sintético "sem enchente", validação placebo, decomposição `do()` intermunicipal/aterros, *block-bootstrap* 95% CI, gráficos `Fig. C1–C4` e Relatório de Verificação (`verificacao_cientifica.md` + `run_manifest.json`) |
+| **F05 — Prontidão, Filas Hospitalares e Gatilhos (`readiness`)** | [05-prontidao-e-filas-simpy.md](features/05-prontidao-e-filas-simpy.md) | ✅ Concluída (V1 RS) | `ConformalFloodCalibrator` (`2023`, `0,00%` viol.), simulador de eventos discretos `SimPy` (estresse pôlder `15%`, redução de **`-36,8%`** no pico de fila e **`16`** dias de sobrecarga evitados em POA), gatilhos observáveis e `Fig. C5` |
+| **F06 — Auditoria Estatística, Análise Contrafactual e Relatório (`audit`)** | [06-auditoria-contrafactual-e-relatorio.md](features/06-auditoria-contrafactual-e-relatorio.md) | ✅ Concluída (`C1–C5`) | Controle sintético "sem enchente", validação placebo, decomposição `do()` intermunicipal/aterros, *block-bootstrap* 95% CI, **todas as 5 figuras (`Fig. C1–C5`)** e Relatório de Verificação (`verificacao_cientifica.md` + `run_manifest.json`) |
 | **F07 — CLI e Orquestração Reprodutível (`cli`)** | *(a criar na Etapa 1–3)* | ⏳ Planejada | Ponto de entrada único, logging JSON estruturado, `run_manifest.json` e linhagem de dados reproduzível |
 
 ---
@@ -64,12 +64,12 @@
 - [ ] Implementar `HydroFiLMMonotonicNet` em PyTorch Lightning (`F03`) sem impermeabilidade no ramo irrestrito e calibração pós-hoc (`ECE`, `BSS`)
 - [ ] Evoluir LOS para riscos competitivos (`scikit-survival`: alta, UTI, transferência, óbito) e benchmarks `aeon` MiniRocket / `TimesFM 2.5`
 
-### ⏳ Etapa 3 — Incerteza Bayesiana, Prontidão (`SimPy`), Análise Contrafactual e Auditoria RS (2024/2025)
-- [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) com intervalos preditivos $P_{50}/P_{90}/P_{95}$
-- [ ] Construir simulador de filas hospitalares (`SimPy`: emergência, enfermaria, UTI, adiamento de eletivas, *lead time* 24–72h e cortes viários `OSMnx`)
-- [ ] Implementar análise contrafactual estruturada (`src/previsao_leitos/audit/counterfactual.py` + `plots.py`): controle sintético "sem enchente", testes placebo, acurácia de excesso/timing de pico e decomposição `do()` (chuva local, escoamento a montante, remanso lagunar, áreas aterradas e `W_ref`)
-- [ ] Gerar explicabilidade auditável (`SHAP` com verificação de aditividade) e cenários de estresse composto com tabela de gatilhos observáveis
-- [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica** (`verificacao_cientifica.md` + `run_manifest.json` + 5 gráficos contrafactuais `Fig. C1–C5`: metodologia, ferramentas, datasets, *block-bootstrap* 95% CI e Net Benefit)
+### 🔄 Etapa 3 — Incerteza Calibrada, Prontidão (`SimPy`), Análise Contrafactual e Auditoria RS (2024/2025)
+- [x] Implementar calibração conformal heterocedástica em `2023` (`ConformalFloodCalibrator`: eleva cobertura no choque UTI de `34,1% → 61,4%` mantendo `0,00%` violações monotônicas)
+- [x] Construir simulador de filas hospitalares (`SimPy` em `src/previsao_leitos/readiness/`: emergência/UTI, adiamento de eletivas, *lead time* `24–72h`, evacuação em áreas aterradas/pôlderes e tabela de gatilhos observáveis — redução de `-36,8%` no pico de fila em POA)
+- [x] Implementar análise contrafactual estruturada completa (`src/previsao_leitos/audit/`: controle sintético "sem enchente", testes placebo, acurácia de excesso/timing, decomposição `do()` e **todas as 5 figuras `Fig. C1–C5`**)
+- [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
+- [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
 
 ### ⏳ Etapa 4 — Escala Nacional Brasil (27 UFs e Rede Nacional de Hospitais-Escola)
 - [ ] Escalar ingestão e cubos espaciais para 5.570 municípios e 27 UFs (`polars` + `dask`)

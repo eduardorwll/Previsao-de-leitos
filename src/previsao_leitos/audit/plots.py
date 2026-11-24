@@ -7,6 +7,8 @@ from pathlib import Path
 import matplotlib
 import polars as pl
 
+from previsao_leitos.readiness.simulator import CounterfactualReadinessComparison
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -235,6 +237,80 @@ def plot_c4_intermunicipal_landfill_waterfall(
         fontweight="bold",
     )
     ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
+def plot_c5_simpy_contingency(
+    comparison: CounterfactualReadinessComparison,
+    *,
+    target_label: str,
+    output_path: Path,
+) -> Path:
+    """Fig. C5: Contrafactual de filas SimPy — Acionamento Antecipado (h=2) vs. Reativo (h=0)."""
+    reac = comparison.reactive_h0.daily_df
+    proa = comparison.proactive_h2.daily_df
+    days = reac["dia"].to_numpy()
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10.0, 6.4), sharex=True)
+
+    ax1.plot(
+        days,
+        reac["fila_espera_pacientes"].to_numpy(),
+        color=_COLOR_MODEL,
+        linewidth=2.2,
+        label=f"Reativo h=0 (pico={comparison.reactive_h0.peak_queue_patients} pac.)",
+    )
+    ax1.plot(
+        days,
+        proa["fila_espera_pacientes"].to_numpy(),
+        color=_COLOR_NEG,
+        linewidth=2.2,
+        linestyle="--",
+        label=f"Proativo h=2 sem. (pico={comparison.proactive_h2.peak_queue_patients} pac.)",
+    )
+    ax1.fill_between(
+        days,
+        proa["fila_espera_pacientes"].to_numpy(),
+        reac["fila_espera_pacientes"].to_numpy(),
+        where=reac["fila_espera_pacientes"].to_numpy() >= proa["fila_espera_pacientes"].to_numpy(),
+        color=_COLOR_NEG,
+        alpha=0.14,
+        label=f"Redução de pico: {comparison.queue_peak_reduction_pct:.1f}%",
+    )
+    ax1.set_ylabel("Fila de Espera (Pacientes)")
+    ax1.set_title(
+        f"Fig. C5 — Simulação Contrafactual de Contingência SimPy ({target_label})",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+    ax1.legend(fontsize=8.5, loc="upper right")
+    ax1.grid(alpha=0.25)
+
+    ax2.plot(
+        days,
+        reac["ocupacao_pct"].to_numpy(),
+        color=_COLOR_MODEL,
+        linewidth=1.8,
+        label=f"Ocupação Reativo h=0 ({comparison.reactive_h0.overload_days_gt95} dias >=95%)",
+    )
+    ax2.plot(
+        days,
+        proa["ocupacao_pct"].to_numpy(),
+        color=_COLOR_NEG,
+        linewidth=1.8,
+        linestyle="--",
+        label=f"Ocupação Proativo h=2 ({comparison.proactive_h2.overload_days_gt95} dias >=95%)",
+    )
+    ax2.axhline(95.0, color=_COLOR_REAL, linestyle=":", linewidth=1.2, label="Limiar 95%")
+    ax2.set_ylabel("Ocupação Efetiva (%)")
+    ax2.set_xlabel("Dia da Janela Simulada")
+    ax2.legend(fontsize=8.5, loc="lower right")
+    ax2.grid(alpha=0.25)
+
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")

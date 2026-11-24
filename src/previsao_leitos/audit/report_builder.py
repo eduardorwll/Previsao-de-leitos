@@ -19,9 +19,11 @@ from previsao_leitos.audit.plots import (
     plot_c2_shock_excess_accuracy,
     plot_c3_placebo_validation,
     plot_c4_intermunicipal_landfill_waterfall,
+    plot_c5_simpy_contingency,
 )
 from previsao_leitos.domain import LeakageViolationError
 from previsao_leitos.geo import SplitPolicy
+from previsao_leitos.readiness.simulator import CounterfactualReadinessComparison
 
 _CLINICAL_BOUNDARY_NOTE = (
     "Pesquisa aberta exclusivamente para avaliação metodológica e planejamento agregado "
@@ -97,8 +99,9 @@ def build_verification_report(
     policy: SplitPolicy | None = None,
     allow_holdout: bool = False,
     seed: int = 42,
+    simpy_comparison: CounterfactualReadinessComparison | None = None,
 ) -> VerificationReportArtifacts:
-    """Gera relatório completo (`verificacao_cientifica.md`), `run_manifest.json` e Fig. C1-C4."""
+    """Gera relatório completo (`verificacao_cientifica.md`), `run_manifest.json` e Fig. C1-C5."""
     active_policy = policy or SplitPolicy()
     if eval_year >= active_policy.holdout_year and not allow_holdout:
         raise LeakageViolationError(
@@ -131,7 +134,15 @@ def build_verification_report(
         target_label=target_label,
         output_path=fig_dir / "fig_c4_decomposicao_intermunicipal_aterro.png",
     )
-    figures = (fig_c1, fig_c2, fig_c3, fig_c4)
+    fig_list = [fig_c1, fig_c2, fig_c3, fig_c4]
+    if simpy_comparison is not None:
+        fig_c5 = plot_c5_simpy_contingency(
+            simpy_comparison,
+            target_label=f"{target_label} - {simpy_comparison.region_label}",
+            output_path=fig_dir / "fig_c5_contingencia_simpy.png",
+        )
+        fig_list.append(fig_c5)
+    figures = tuple(fig_list)
 
     tools = {
         "python": platform.python_version(),
@@ -271,8 +282,32 @@ def build_verification_report(
         "  ![Fig. C3](figures/fig_c3_validacao_placebo.png)",
         "- **Fig. C4 (Decomposição Waterfall Intermunicipal e de Áreas Aterradas):**",
         "  ![Fig. C4](figures/fig_c4_decomposicao_intermunicipal_aterro.png)",
-        "",
     ]
+    if simpy_comparison is not None:
+        r0 = simpy_comparison.reactive_h0
+        p2 = simpy_comparison.proactive_h2
+        report_lines.extend(
+            [
+                "",
+                "### Contrafactual Operacional Hospitalar (`SimPy`: `h=2` sem. vs. `h=0`)",
+                "",
+                "| Política Simulada | Pico de Fila (Pac.) | Dias >=95% | Espera Média (h) "
+                "| Eletivas Adiadas |",
+                "| :--- | :---: | :---: | :---: | :---: |",
+                f"| **Reativo (`h=0`)** | `{r0.peak_queue_patients}` | `{r0.overload_days_gt95}` "
+                f"| `{r0.mean_wait_hours:.1f}` | `{r0.deferred_electives}` |",
+                f"| **Proativo (`h=2` sem.)** | `{p2.peak_queue_patients}` "
+                f"| `{p2.overload_days_gt95}` | `{p2.mean_wait_hours:.1f}` "
+                f"| `{p2.deferred_electives}` |",
+                "",
+                f"- **Redução no pico de fila:** "
+                f"`{simpy_comparison.queue_peak_reduction_pct:.1f}%` "
+                f"| **Dias de sobrecarga evitados:** `{simpy_comparison.overload_days_saved}`",
+                "- **Fig. C5 (Contrafactual de Contingência SimPy):**",
+                "  ![Fig. C5](figures/fig_c5_contingencia_simpy.png)",
+            ]
+        )
+    report_lines.append("")
     report_path = out / "verificacao_cientifica.md"
     report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
