@@ -93,64 +93,53 @@ Na terceira fase, os dados climáticos e as previsões do `HydroTFTNet` (treinad
 | 10 | 0.021 | 4.435 | 0.487 | 5593.0 | 5573 | 2268.0 | 2278 | 1.183 |
 | 11 | 0.013 | 2.322 | 0.000 | 5573.0 | 5624 | 2278.0 | 2241 | 1.186 |
 
-## Auditoria Regional do Rio Grande do Sul (2024): Roteamento de Bacias e Demanda Real (SIH/SUS vs. CNES-SUS)
-
-Para validar o pipeline sob um evento extremo real (*out-of-time*), foi desenvolvida uma auditoria dedicada aos **497 municípios do Rio Grande do Sul**, integrando hidrologia de bacias, decretos oficiais de desastres e registros hospitalares do SUS. O objetivo foi superar correlações simples de oferta cadastrada e medir a **demanda real de internações** frente à **capacidade pública disponível** durante a catástrofe de 2024.
-
 ---
 
-### 1. Stack Tecnológica e Ferramentas Adicionadas
+## 4ª Fase — Roteamento de Bacias Hidrográficas e Demanda Real de Leitos (SIH/SUS vs. CNES-SUS no RS)
 
-* **Google BigQuery & `basedosdados`:** Extração em escala de séries históricas (2010–2025) de decretos hidrológicos (SEDEC), internações hospitalares (SIH/SUS), leitos públicos (CNES-SUS) e malha regional (IBGE), utilizando particionamento de consultas e cache local em `.parquet` (`pandas`/`pyarrow`) para reprodutibilidade e baixo custo de processamento.
-* **PyTorch (`HydroFiLMRegionalBasinNet`):** Arquitetura espaço-temporal customizada que combina `Bi-GRU`, modulação `FiLM` (*Feature-wise Linear Modulation*), `MultiheadAttention` e um **Ramo Monotônico Estrutural** (`F.softplus`) para prever a severidade regional de alagamentos com restrições físicas explícitas.
-* **Scikit-Learn (`Pipeline`, `StandardScaler`, `Ridge`):** Modelagem regressiva regularizada no Estágio 2 para traduzir a severidade dos alagamentos em demanda de leitos, permitindo extrapolação controlada em eventos extremos sem o travamento de teto característico de modelos baseados em árvores.
+A auditoria da 3ª fase revelou duas limitações estruturais que motivaram uma quarta etapa focada nos **497 municípios do Rio Grande do Sul** (validação *out-of-time* em 2024):
 
----
+- **Ponto cego hidrológico em cidades de jusante:** Tratar municípios isoladamente não capturava cheias em regiões como Porto Alegre e Pelotas, onde o alagamento decorre da água acumulada que desce de bacias a montante.
+- **Rigidez da oferta no CNES e persistência ingênua:** Testes no histórico `2011–2023` mostraram que o cadastro de leitos do CNES tem elasticidade climática praticamente nula (`+0.00000`) em eventos comuns — hospitais absorvem a demanda elevando a taxa de ocupação sem abrir novos leitos no sistema. Além disso, prever o delta mensal usando `lag_1m` real com perda L1 induzia persistência ingênua (curva prevista deslocada 1 mês para a direita).
 
-### 2. Engenharia de Dados e Correções Estruturais (DATASUS / IBGE)
+### Ferramentas, Arquitetura e Adições de Engenharia
 
-A auditoria direta sobre os microdados públicos revelou quatro armadilhas clássicas que precisaram ser corrigidas no ETL antes da modelagem:
+- **Roteamento Hidrológico Causal (`HydroFiLMRegionalBasinNet`):** Os 497 municípios do RS foram agrupados em **8 regiões hidrográficas** conectadas por um grafo causal **Montante $\rightarrow$ Jusante** (`shift(1)`). A arquitetura em PyTorch (`Bi-GRU` + `FiLM` condicionado por região/relevo + `Multi-Head Self-Attention` + **Ramo Monotônico Estrutural** via `F.softplus`) passou a receber a chuva acumulada (`7d`, `15d`, `30d`) e o escoamento efetivo das bacias a montante, além da variação barométrica em 3 dias (`pressao_var_3d`, proxy de frentes frias/vento Sul), treinada sobre os decretos completos da SEDEC (sem filtro de chuva local).
+- **Migração para Demanda Real (`SIH/SUS` via BigQuery / `basedosdados`):** A demanda hospitalar passou a ser medida diretamente pelas **diárias de internação do SIH/SUS**, convertidas em leitos necessários sob a taxa de ocupação segura recomendada pela OMS/MS (**85%**):
+  $$\text{Leitos Necessários}_{r,m} = \frac{\text{Diárias de Internação}_{r,m}}{\text{Dias do Mês}_m \times 0{,}85}$$
+- **Saneamento de Microdados do DATASUS/IBGE:** Foram corrigidos quatro gargalos clássicos no ETL: (1) **deduplicação por `id_aih`** (`SELECT DISTINCT`), eliminando um pico artificial de 2x em agosto/2024 na tabela bruta; (2) **agrupamento por `data_internacao`** (e não pelo mês de faturamento/competência), evitando o deslocamento temporal de AIHs faturadas com atraso; (3) **padronização IBGE de 6 dígitos (`id_mun_6`)** para cruzar SIH e IBGE; e (4) **alinhamento SUS vs. SUS**, filtrando o CNES exclusivamente por `quantidade_sus` (Total e UTI `tipo_leito = 3`) para remover falsos superávits causados por leitos privados.
+- **Modelagem de Demanda (`Ridge` + `StandardScaler`) com Separação de Coortes:** Treinado em `2011–2019` e `2023` (excluindo os anos de pandemia `2020–2022`) e ancorado exclusivamente na base de 2023 (*zero leakage* intra-anual). Foram adicionados parâmetros para capturar a dinâmica real de crises: `sev_log` (resposta côncava), `disrupcao_extrema` (curva em "U invertido" para bloqueio hospitalar), `sev_lag_1m`/`sev_lag_2m` (rebote em 30–60 dias), `sev_vizinhos_max` (transbordamento de pacientes entre regiões adjacentes) e `temp_frio_idx`.
+  - **Coortes de Urgência SUS (Total e UTI) — Formulação Multiplicativa:** Remove cirurgias eletivas (`carater_internacao = 01`) e prevê a variação percentual sobre a base de dezembro do ano anterior ($\text{Base}_{\text{dez}} \times (1 + \hat{p})$).
+  - **Coortes de CIDs Sensíveis a Enchentes (Total e UTI) — Formulação Aditiva/100k:** Filtra Leptospirose (`A27`), hídricas (`A00–A09`, `B15`), respiratórias agudas (`J00–J22`, `J45–J46`), pele (`L00–L08`) e traumas/hipotermia (`S00–T98`), **excluindo Dengue (`A90–A92`)** para evitar contaminação pela epidemia de outono de 2024. Por serem séries esparsas (onde dezembro pode ser `0`), prevê o acréscimo aditivo de leitos por 100 mil habitantes sobre a média do ano anterior, evitando o travamento em zero.
 
-1. **Deduplicação de AIHs (`SELECT DISTINCT` por `id_aih`):** A tabela bruta do SIH/SUS (`br_ms_sih.aihs_reduzidas`) apresentava registros duplicados na competência de agosto/2024, gerando um pico artificial de 2x em todas as regiões. A deduplicação por chave de AIH eliminou a anomalia.
-2. **Alinhamento por Data Real de Internação (`data_internacao`):** Agrupar pelo mês de competência/faturamento (`ano`/`mes`) deslocava internações de maio para meses posteriores devido ao atraso administrativo na emissão das AIHs. O agrupamento foi migrado para `data_internacao` (lendo competências até 2025 para não truncar internações do final de 2024).
-3. **Normalização de Códigos Municipais (6 vs. 7 dígitos):** O SIH/SUS utiliza o código IBGE de 6 dígitos (sem dígito verificador), enquanto o diretório do IBGE utiliza 7 dígitos. Todos os cruzamentos foram padronizados pela chave `id_mun_6`.
-4. **Comparação SUS vs. SUS (`quantidade_sus`):** Como o SIH registra apenas internações financiadas pelo SUS, a oferta do CNES (`br_ms_cnes.leito`) foi filtrada exclusivamente para leitos públicos (`quantidade_sus`), separando **Total SUS** e **UTI/Complementar SUS** (`tipo_leito = 3`) para eliminar falsos superávits causados pela inclusão de leitos privados.
+### Resultados — Estágio 1: Alagamento por Região Hidrográfica (RS — Teste Out-of-Time 2024)
 
----
+| Região Hidrográfica | ROC-AUC | PR-AUC | Brier Score | MAE (% Mun.) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Planalto Norte (Alto Jacuí/Uruguai)** | **0.8562** | **0.7532** | 0.1459 | 2.66% |
+| **Fronteira Oeste e Campanha** | 0.8262 | 0.4518 | **0.1045** | 2.70% |
+| **Depressão Central (Médio Jacuí)** | 0.7948 | 0.6336 | 0.1270 | 2.97% |
+| **Vales (Taquari e Rio Pardo)** | 0.7704 | 0.4283 | 0.1303 | 3.54% |
+| **Serra Gaúcha (Alto Taquari/Caí)** | 0.7357 | 0.5526 | 0.1321 | 2.95% |
+| **Noroeste e Missões** | 0.7333 | 0.5392 | 0.1655 | **2.63%** |
+| **Metropolitana e Bacia do Guaíba** | 0.7216 | 0.5671 | 0.1580 | **2.63%** |
+| **Região Sul e Lagoa dos Patos** | 0.6981 | 0.5701 | 0.1798 | 4.33% |
 
-### 3. Estágio 1: Modelagem Hidrológica com Roteamento de Bacias
+### Resultados — Estágio 2: Demanda de Leitos SIH/SUS (2024: Alag. Previsto vs. Alag. Real)
 
-#### Divisão Hidrográfica e Grafo Causal (Montante $\rightarrow$ Jusante)
-Os 497 municípios foram agrupados em **8 regiões hidrográficas/geográficas** conectadas por um grafo causal de escoamento com defasagem estrita de 1 dia (`shift(1)`):
-* **Cabeceiras (Montante):** *Serra Gaúcha (Alto Taquari/Caí)* e *Planalto Norte (Alto Jacuí/Uruguai)*.
-* **Bacias Intermediárias:** *Vales (Taquari e Rio Pardo)* e *Depressão Central (Médio Jacuí)*.
-* **Exutórios (Jusante):** *Metropolitana e Bacia do Guaíba* (recebe Serra, Vales, Depressão Central e Planalto Norte) e *Região Sul e Lagoa dos Patos* (recebe Guaíba, Vales e Depressão Central).
-* **Vertente Uruguai:** *Noroeste e Missões* $\rightarrow$ *Fronteira Oeste e Campanha*.
+| Coorte (SIH/SUS — RS 2024) | Formulação | MAE (Alag. Previsto) | $R^2$ (Alag. Previsto) | MAE (Alag. Real) | $R^2$ (Alag. Real) |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **Urgência — Total SUS** | Multiplicativa | **159.26 leitos** | **0.9719** | 157.88 leitos | 0.9723 |
+| **Urgência — UTI SUS** | Multiplicativa | **20.09 leitos** | **0.9605** | 20.00 leitos | 0.9605 |
+| **CIDs Enchente — Total SUS** | Aditiva / 100k | **2.49 leitos** | **0.7283** | 2.76 leitos | 0.6586 |
+| **CIDs Enchente — UTI SUS** | Aditiva / 100k | **0.29 leito** | **0.4107** | 0.30 leito | 0.3467 |
 
-#### Adições na Arquitetura e Features
-* **Roteamento de Montante:** Injeção da média causal de precipitação acumulada (`7d`, `15d`, `30d`) e escoamento efetivo (`7d`, `15d`) das bacias a montante, removendo o ponto cego em regiões que alagam por cheia de rio mesmo sem chuva local extrema.
-* **Saturação e Dinâmica Atmosférica:** Índice de saturação antecedente do solo ($\text{API}_t = 0{,}88 \cdot \text{API}_{t-1} + P_{t-1}$), escoamento efetivo ponderado por impermeabilidade e variação barométrica de 3 dias (`pressao_var_3d`, proxy de frentes frias/vento Sul).
-* **Alvo Oficial Completo (SEDEC):** Percentual de municípios da região sob decreto hidrológico (COBRADE `12%`, `13214`, `13215`) em janela de 10 dias, sem filtro de chuva local.
-* **Ramo Monotônico Estrutural:** Pesos positivos via `F.softplus` garantem fisicamente que maior impermeabilidade urbana (interagindo com chuva de 3 dias) aumenta o risco de alagamento e maior retenção vegetal reduz o risco:
-  $$\text{soil\_eff} = (w_{\text{imp}} + w_{\text{int}} \cdot \text{softplus}(P_{3d})) \cdot \text{Imp} - w_{\text{veg}} \cdot \text{Veg}$$
+### Principais Achados e Limitações Mapeadas
 
----
+- **Equivalência Operacional (Rede Neural vs. SEDEC):** Alimentar o modelo de leitos com o alagamento *previsto* pela `HydroFiLMRegionalBasinNet` empatou com o uso dos decretos *reais* da SEDEC nas coortes de Urgência ($R^2 = 0.9719$ vs. $0.9723$) e os superou nas coortes de CIDs ($0.7283$ vs. $0.6586$), permitindo estimar a pressão hospitalar antes da emissão formal dos decretos.
+- **Efeito "Bloqueio e Rebote" (Maio vs. Julho/2024):** As internações gerais no RS caíram **`-12,5%`** em maio (`71.877` $\rightarrow$ `62.903`) devido ao cancelamento de cirurgias eletivas, bloqueio de rodovias e evacuação de hospitais. Isolando apenas **Urgências**, a queda foi de apenas **`-5,1%`**, seguida por um **rebote recorde em julho** (`72.569` internações gerais, `52.021` urgências e `46.505` diárias de UTI), quando a **Depressão Central** atingiu **81,9%** de ocupação da oferta SUS apenas com UTIs de urgência.
+- **Limitações conhecidas:** (1) Ausência de séries de **vento superficial** e **cotas fluviométricas (ANA)**, fatores críticos no represamento da Lagoa dos Patos e do Guaíba; e (2) preenchimento parcial da coluna `cid_principal_categoria` na tabela do BigQuery (`304–465` internações/mês no RS), motivo pelo qual as coortes de **Urgência SUS** constituem o resultado principal da auditoria.
 
-### 4. Estágio 2: Previsão de Demanda de Leitos (SIH/SUS)
+> **Conclusão da 4ª Fase:** O acoplamento entre roteamento hidrológico de bacias e demanda real deduplicada do SIH/SUS elimina a persistência ingênua do CNES e demonstra que a rede neural já fornece sinal operacional suficiente para antecipar a pressão sobre leitos SUS (especialmente UTIs de urgência) e dimensionar o rebote pós-enchente.
 
-#### Por que migrar do CNES para o SIH/SUS?
-Testes sobre o histórico `2011–2023` demonstraram que a oferta cadastrada no CNES é **rígida** (coeficientes de elasticidade climática zerados em `+0.00000`): em enchentes comuns, hospitais absorvem a demanda elevando a taxa de ocupação sem abrir novos leitos no cadastro. Além disso, prever `delta` com perda L1 e `lag_1m` real induzia **persistência ingênua** (curva deslocada 1 mês para a direita).
-
-A demanda real passou a ser calculada a partir das **diárias de internação do SIH/SUS**, convertidas em leitos necessários sob a taxa de ocupação segura recomendada pela OMS/MS (**85%**):
-
-$$\text{Leitos Necessários}_{r,m} = \frac{\text{Diárias de Internação}_{r,m}}{\text{Dias do Mês}_m \times 0{,}85}$$
-
-#### Formulações, Coortes e Novos Parâmetros de Aprendizado
-Para evitar distorções da pandemia, os anos de **2020–2022 foram removidos do treino** (`2011–2019` e `2023`). A previsão de 2024 é ancorada exclusivamente na base de 2023 (zero vazamento intra-anual):
-
-* **Separação por Urgência vs. CIDs Sensíveis a Enchentes:**
-  * **Urgência SUS (Total e UTI):** Remove cirurgias eletivas (`carater_internacao = 01`), isolando atendimentos de urgência, emergência e acidentes.
-  * **CIDs Sensíveis a Enchentes (Total e UTI):** Filtra Leptospirose (`A27`), doenças hídricas/diarreicas (`A00–A09
-| 12 | 0.012 | 3.064 | 0.000 | 5624.0 | 5598 | 2241.0 | 2229 | 1.156 |
-
-<img width="1289" height="440" alt="Comparativo mensal RS 2024: Nível de Alagamento e Leitos Complementares (Previsto vs. Real)" src="https://github.com/user-attachments/assets/f04dc47f-636d-49a3-8bd4-55a2b1c5cf1c" />
+ivo mensal RS 2024: Nível de Alagamento e Leitos Complementares (Previsto vs. Real)" src="https://github.com/user-attachments/assets/f04dc47f-636d-49a3-8bd4-55a2b1c5cf1c" />
