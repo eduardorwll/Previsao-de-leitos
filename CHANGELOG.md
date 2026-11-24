@@ -8,6 +8,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 2–3 / Feature F03.1 (`hydrology` — `HydroFiLM-ENSO` e Gerador *Out-of-Fold* Causal):**
+  - Estendida `HydroFiLMMonotonicNet` e `HydroLightningModule` (`hydrology/model.py`) com parâmetro `enso_dim` modulando `FiLM` pelos índices de El Niño/Atlântico Sul preservando `0,00%` de violações monotônicas verificadas via `torch.autograd.grad`.
+  - Criado `src/previsao_leitos/hydrology/oof.py` com `audit_autograd_monotonicity` e `generate_causal_hydro_oof_predictions` (validação expansiva anual em `<= 2022` + calibração em `2023`, zero vazamento futuro) para acoplamento direto à `F04.1`.
 - **Etapa 1–3 / Feature F02.3 (`geo/enso_teleconnections.py` — Teleconexões `ENSO / El Niño` e Atlântico Sul):**
   - Implementado `src/previsao_leitos/geo/enso_teleconnections.py` (`parse_noaa_oni_table`, `classify_enso_regime`, `build_causal_enso_weekly_features`) com projeção mensal → semanal ISO estritamente causal via `publication_lag_days`, `el_nino_intensity >= 0` monotônica e lags `1..24` semanas para `ONI`, `Niño 3.4`, `SOI`, `MEI.v2`, `TSA` e `SALLJ`.
 - **Etapa 1–3 / Feature F02.2 (`geo` — Convolução Multi-Salto, `MapBiomas` Anti-MAUP e Fontes Hidrológicas Finas):**

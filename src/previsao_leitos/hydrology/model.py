@@ -26,11 +26,13 @@ class HydroFiLMMonotonicNet(nn.Module):
         ctx_dim: int,
         mono_pos_dim: int,
         mono_neg_dim: int,
+        enso_dim: int = 0,
         hidden_dim: int = 32,
         num_heads: int = 4,
         dropout: float = 0.15,
     ) -> None:
         super().__init__()
+        self._enso_dim = enso_dim
         self._gru = nn.GRU(
             input_size=dyn_dim,
             hidden_size=hidden_dim,
@@ -47,9 +49,10 @@ class HydroFiLMMonotonicNet(nn.Module):
             batch_first=True,
         )
         self._norm = nn.LayerNorm(attn_dim)
-        # FiLM: modula representações temporais apenas pelo regime climático da bacia
-        self._film_gamma = nn.Linear(ctx_dim, attn_dim)
-        self._film_beta = nn.Linear(ctx_dim, attn_dim)
+        # FiLM: modula representações temporais pelo regime climático da bacia + ENSO/Atlântico
+        film_in_dim = ctx_dim + enso_dim
+        self._film_gamma = nn.Linear(film_in_dim, attn_dim)
+        self._film_beta = nn.Linear(film_in_dim, attn_dim)
 
         self._base_logit_head = nn.Sequential(
             nn.Linear(attn_dim, hidden_dim),
@@ -76,13 +79,28 @@ class HydroFiLMMonotonicNet(nn.Module):
         x_ctx: torch.Tensor,
         x_mono_pos: torch.Tensor,
         x_mono_neg: torch.Tensor,
+        x_enso: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         seq_out, _ = self._gru(x_dyn)
         attn_out, _ = self._attn(seq_out, seq_out, seq_out, need_weights=False)
         h = self._norm(seq_out + attn_out)[:, -1, :]
 
-        gamma = 1.0 + 0.25 * torch.tanh(self._film_gamma(x_ctx))
-        beta = self._film_beta(x_ctx)
+        if self._enso_dim > 0:
+            enso_vec = (
+                x_enso
+                if x_enso is not None
+                else torch.zeros(
+                    (x_ctx.shape[0], self._enso_dim),
+                    dtype=x_ctx.dtype,
+                    device=x_ctx.device,
+                )
+            )
+            film_in = torch.cat([x_ctx, enso_vec], dim=-1)
+        else:
+            film_in = x_ctx
+
+        gamma = 1.0 + 0.25 * torch.tanh(self._film_gamma(film_in))
+        beta = self._film_beta(film_in)
         h_mod = gamma * h + beta
 
         base_logit = self._base_logit_head(h_mod).squeeze(-1)
@@ -109,6 +127,7 @@ class HydroLightningModule(L.LightningModule):
         ctx_dim: int,
         mono_pos_dim: int,
         mono_neg_dim: int,
+        enso_dim: int = 0,
         hidden_dim: int = 32,
         num_heads: int = 4,
         dropout: float = 0.15,
@@ -124,6 +143,7 @@ class HydroLightningModule(L.LightningModule):
             ctx_dim=ctx_dim,
             mono_pos_dim=mono_pos_dim,
             mono_neg_dim=mono_neg_dim,
+            enso_dim=enso_dim,
             hidden_dim=hidden_dim,
             num_heads=num_heads,
             dropout=dropout,
@@ -139,13 +159,20 @@ class HydroLightningModule(L.LightningModule):
         x_ctx: torch.Tensor,
         x_mono_pos: torch.Tensor,
         x_mono_neg: torch.Tensor,
+        x_enso: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        out: tuple[torch.Tensor, torch.Tensor] = self.net(x_dyn, x_ctx, x_mono_pos, x_mono_neg)
+        out: tuple[torch.Tensor, torch.Tensor] = self.net(
+            x_dyn, x_ctx, x_mono_pos, x_mono_neg, x_enso=x_enso
+        )
         return out
 
     def _shared_step(self, batch: dict[str, torch.Tensor], stage: str) -> torch.Tensor:
         logits, sev = self(
-            batch["x_dyn"], batch["x_ctx"], batch["x_mono_pos"], batch["x_mono_neg"]
+            batch["x_dyn"],
+            batch["x_ctx"],
+            batch["x_mono_pos"],
+            batch["x_mono_neg"],
+            x_enso=batch.get("x_enso"),
         )
         pos_w = self.get_buffer("_pos_weight")
         bce = F.binary_cross_entropy_with_logits(logits, batch["y_event"], pos_weight=pos_w)

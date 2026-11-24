@@ -38,3 +38,4 @@ Executado via [`scripts/run_rs_f03_hydrology.py`](../../scripts/run_rs_f03_hydro
 - [x] Implementar `HydroFiLMMonotonicNet` + `HydroLightningModule` (`model.py`) com monotonicidade verificada por `torch.autograd.grad` em ambas as cabeças
 - [x] Implementar `TemperatureScaler` (`calibration.py`)
 - [x] Validar com testes *Prove-It* e rodar treino/calibração real no RS (`2025` intocado)
+- [x] **Evolução `F03.1 HydroFiLM-ENSO`:** adicionar condicionamento `FiLM` explícito por teleconexões El Niño/ENSO + Atlântico Sul (`enso_dim` em `model.py`), auditoria `audit_autograd_monotonicity` (`0,00%` violações) e gerador *out-of-fold* estritamente causal `generate_causal_hydro_oof_predictions` (`hydrology/oof.py`) para acoplamento direto à `F04.1`
