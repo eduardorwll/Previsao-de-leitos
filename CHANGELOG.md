@@ -5,6 +5,14 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 ## [Unreleased]
 
 ### Added
+- **Etapa 1 / Feature F01 (`ingestion` — Especificação V1):** Especificação completa em `spec/SPEC-ingestion.md` (costura `TabularSourcePort` com `BigQueryAdapter` parametrizado + `dry_run` + `ParquetFixtureAdapter`, cache atômico SHA-256, extração CNES por tipo específico de UTI e hospitais-escola, demanda semanal `SIH-SUS`/`SINAN` agregada com supressão LGPD $n < 5$), documentação da feature (`docs/features/01-ingestao-segura.md`) e guia seguro de acesso ao BigQuery sem chaves `.json` (`docs/runbooks/setup-bigquery.md`).
+
+### Changed
+- **Planejamento (Abordagem Mista — RS Semanal Multi-Horizonte):** Atualizados `spec/capability-map.md`, `docs/PROGRESSO.md`, `docs/data-catalog.md`, `docs/adr/0002` e `docs/adr/0004` para incorporar previsão semanal *ex-ante* ($h=1..4$ semanas, foco em $h=2$ semanas / Onda 1 + Onda 2 leptospirose), estratificação explícita por tipo de UTI e Macrorregião/Hospital-Escola, e execução mista em duas trilhas incrementais (Trilha 1A núcleo semanal RS → Trilha 1B enriquecimento físico e fila reprimida).
+
+## [0.1.0] - 2026-11-24 (Etapa 0 — Fundação Modular)
+
+### Added
 - **Etapa 0 / Feature F00 (`domain`):** Empacotamento Python 3.12 (`pyproject.toml`, `.python-version`, `uv.lock`), tipos nominais validados (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), hierarquia única de exceções (`src/previsao_leitos/domain/`) e 17 testes unitários com `100%` de cobertura de linhas e branches (`tests/unit/test_domain_types.py`).
 - **Qualidade e CI:** Verificador mecânico de regras (`scripts/check_constraints.py`), pipeline CI rápido CPU-only (`.github/workflows/ci.yml`: `ruff`, `mypy`, `pytest --cov`, `pip-audit`, `gitleaks`), Dependabot (`.github/dependabot.yml`) e `.env.example`.
 - **Documentação Técnica e Científica:** Painel de progresso por etapa e feature (`docs/PROGRESSO.md`), documentação da feature F00 (`docs/features/00-dominio-e-fundacao.md`), catálogo de 14 bases de dados (`docs/data-catalog.md`), mapa de capacidades (`spec/capability-map.md`), glossário em 3 contextos (`GLOSSARY-MAP.md` + `docs/glossaries/`), 5 ADRs (`docs/adr/0001–0005`), padrões de qualidade (`CONSTRAINTS.md`), diário de desempenho (`PERF.md`) e runbook de expurgo de segredos Git (`docs/runbooks/git-history-secret-purge.md`).

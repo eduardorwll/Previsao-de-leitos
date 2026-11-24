@@ -12,6 +12,8 @@ Projeto de **pesquisa aberta** voltado à previsão *ex-ante* da **necessidade d
 | :--- | :--- |
 | **[Mapa de Progresso (Etapas e Features)](docs/PROGRESSO.md)** | Acompanhamento consolidado etapa por etapa e feature por feature com marcação de progresso |
 | **[Feature F00 — Domínio e Fundação](docs/features/00-dominio-e-fundacao.md)** | Tipos validados (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), exceções e qualidade base |
+| **[Feature F01 — Ingestão Segura e LGPD](docs/features/01-ingestao-segura.md)** | Especificação V1 (`spec/SPEC-ingestion.md`) para CNES (UTI específica + ensino), SIH-SUS semanal agregado e SINAN |
+| **[Guia de Setup do BigQuery](docs/runbooks/setup-bigquery.md)** | Passo a passo para obter `GCP_PROJECT_ID`, autenticar via ADC sem chaves `.json` e testar com custo `0 bytes` |
 | **[Catálogo de Bases de Dados](docs/data-catalog.md)** | 14 fontes oficiais (Saúde, Hidrologia, Observação da Terra, Mobilidade e Demografia) e critérios de seleção |
 | **[Mapa de Capacidades](spec/capability-map.md)** | Arquitetura modular alvo (`domain` → `ingestion` → `geo` → `hydrology` → `demand` → `readiness` → `audit` → `cli`) |
 | **[Glossário de Domínio](GLOSSARY-MAP.md)** | Terminologia canônica dividida em Hidrologia, Capacidade Hospitalar e Previsão/Auditoria |

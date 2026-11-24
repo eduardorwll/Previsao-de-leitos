@@ -7,7 +7,9 @@
 
 O protótipo legado previa a variação mensal de oferta cadastrada no CNES agregada por município (`HistGradientBoostingRegressor` com perda L1), o que colapsou para persistência ($\hat{\Delta}_t = 0$ em 7/11 meses no RS) e não mede quantos leitos são **necessários** em **hospitais-escola** durante uma enchente.
 
-**Decisão:** Separar formalmente **Oferta Cadastrada/Funcional (CNES no grão `id_estabelecimento_cnes` + `leito` + `estabelecimento_ensino`, distinguindo SUS vs. não-SUS e UTI vs. UCI)** de **Demanda Real de Leitos**, modelada por: (1) volume de internações de urgência/emergência e agravos pós-enchente (`SIH-SUS` agregado por hospital-escola e grupo CID-10, complementado por `SINAN`/painéis GERINT quando disponíveis), e (2) **Tempo de Permanência (LOS)** sob riscos competitivos (`scikit-survival`), acoplados a uma **Macrorregião de Referência (*catchment*)** em vez de municípios isolados.
+**Decisão:** Separar formalmente **Oferta Cadastrada/Funcional (CNES no grão `id_estabelecimento_cnes` + `br_ms_cnes.leito` + `estabelecimento_ensino`, distinguindo SUS vs. não-SUS e separando explicitamente UTI Adulto, UTI Pediátrica/Neonatal, Clínico e Cirúrgico de UCI)** de **Demanda Real de Leitos**, modelada em **granularidade semanal/diária** para horizontes multi-passo ($h \in \{1, 2, 3, 4\}$ semanas, foco em $h = 2$ semanas / D+14) por:
+1. Volume de internações de urgência/emergência e agravos pós-enchente (`SIH-SUS` agregado por hospital-escola, especialidade e grupo CID-10), distinguindo **Onda 1** (D+0 a D+5: trauma, crônicos, evacuações) de **Onda 2** (D+7 a D+28: leptospirose via `SINAN`, doenças hídricas e SRAG), validado contra fila reprimida (`GERINT-POA` na Região Metropolitana).
+2. **Tempo de Permanência (LOS)** sob riscos competitivos (`scikit-survival`), acoplado a **Hospitais-Escola e Macrorregiões de Saúde (*catchment*)** para refletir heterogeneidade regional (ex.: Região Metropolitana de Porto Alegre / Vales vs. Norte/Serra mais alto) e fluxos reais `MUNIC_RES → CNES`.
 
 ## Alternativas Rejeitadas
 

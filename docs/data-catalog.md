@@ -133,10 +133,12 @@
 
 ---
 
-## 3. Pacotes Recomendados para Sua Decisão (Escolha V1 RS → V2 Brasil)
+## 3. Estratégia Mista de Ingestão Adotada (V1 RS → V2 Brasil)
 
-| Pacote | Bases Incluídas | Esforço de Ingestão | O que Entrega |
+Para evitar paralisia de ETL sem abrir mão do rigor científico (defasagem de 1–4 semanas, UTI específica e heterogeneidade regional POA vs. Norte/Serra), a seleção segue uma **estratégia mista em duas trilhas incrementais na V1 (RS)** antes da expansão nacional:
+
+| Trilha / Fase | Bases Incluídas | Esforço | O que Entrega de Imediato |
 | :--- | :--- | :---: | :--- |
-| **Opção A — Enxuto (MVP Científico RS)** | `#1 CNES (estab+leito+ensino)` + `#2 SIH-SUS (agg)` + `#6 MERGE-CPTEC` + `#7 ANA HidroWeb/Ottobacias` + `#10 S2iD` + `#12 MapBiomas` + `#14 IBGE/Macrorregiões` | **Baixo–Médio** | Já resolve **100% dos erros críticos** (`C1–C8`, `DB-001..008`): hospitais-escola RS, demanda real + LOS, 100% dos 497 municípios, cotas reais + bacias montante→jusante |
-| **Opção B — Recomendado V1 (RS Completo & Publicável)** *(Recomendado)* | **Tudo da Opção A** + `#3 SINAN (Leptospirose/Hídricas)` + `#4 GERINT-POA (fila/demanda reprimida)` + `#8 ERA5-Land (umidade solo + temp)` + `#11 DEM/HAND & Sentinel-1 (eventos RS)` + `#13 OSMnx (acesso viário)` | **Médio** | Captura **Onda 1 + Onda 2 (leptospirose)**, mede **fila reprimida real no GERINT-POA**, inclui **inundação real de hospitais/vias** e entrega estudo V1 de alto impacto para SES-RS/EBSERH e publicação internacional |
-| **Opção C — Completo V2 (Escala Nacional Brasil 27 UFs)** | **Tudo da Opção B** (substituindo GERINT-POA local pela rede nacional SIH/CNES) + `#5 SIVEP-Gripe (SRAG)` + `#9 INMET horário + CEMADEN` em todo o Brasil via `polars`/`dask` | **Alto** | Cobertura nacional completa (5.570 municípios, todos os biomas, enxurradas urbanas + cheias lentas + SRAG + Hetero-GNN + alocação Pareto federal) |
+| **Trilha 1A — Núcleo Semanal RS (*Tracer Bullet*)** *(Início Imediato)* | `#1 CNES (estab + leito por tipo de UTI + ensino)` + `#2 SIH-SUS (agg semanal sem PII)` + `#3 SINAN (Leptospirose/Onda 2)` + `#6 MERGE-CPTEC (100% RS)` + `#7 ANA HidroWeb/Ottobacias` + `#10 S2iD FIDE` + `#12 MapBiomas` + `#14 IBGE/Macrorregiões` | **Baixo–Médio** | Resolve 100% dos erros críticos e entrega rapidamente o primeiro modelo semanal *ex-ante* ($h=1..4$ semanas, foco $h=2$ semanas) por **UTI Adulto / UTI Ped-Neo / Clínico** e por **Macrorregião / Hospital-Escola do RS** |
+| **Trilha 1B — Enriquecimento Físico & Fila Reprimida (V1 Completa)** | **Adiciona sobre a 1A:** `#4 GERINT-POA (demanda solicitada/fila na capital)` + `#8 ERA5-Land (umidade solo + temp)` + `#11 DEM/HAND & Sentinel-1 SAR (eventos RS)` + `#13 OSMnx (acesso/cortes viários)` | **Médio** | Valida demanda reprimida em Porto Alegre, incorpora física de relevo/inundação de hospitais periféricos e bloqueios de rodovias sem atrasar a validação inicial do *lag* de 2 semanas |
+| **Trilha V2 — Escala Nacional Brasil (27 UFs)** | **Expande 1A + 1B para todo o Brasil** (mantendo SIH/CNES como espinha dorsal nacional) + `#5 SIVEP-Gripe (SRAG)` + `#9 INMET horário + CEMADEN` via `polars`/`dask` | **Alto** | Cobertura nacional (5.570 municípios, todos os biomas, cheias rápidas e lentas, Hetero-GNN e alocação Pareto federal) |

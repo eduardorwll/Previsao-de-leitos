@@ -4,11 +4,22 @@
 
 ---
 
-## 1. Objetivo do Sistema
+## 1. Objetivo do Sistema e Abordagem Mista
 
-Prever, com antecedência acionável (*ex-ante*) e incerteza calibrada ($P_{50}/P_{90}/P_{95}$), a **necessidade de leitos hospitalares (clínicos, cirúrgicos e UTI) e de contingência (*surge capacity*) em hospitais-escola** frente a enchentes:
-- **V1 (Escopo Inicial):** Rio Grande do Sul (497 municípios, bacias hidrográficas críticas e rede de hospitais-escola do RS, validado com rigor sobre 2024 e holdout intocado 2025).
-- **V2 (Expansão Posterior):** Brasil inteiro (27 UFs, 5.570 municípios e rede nacional de hospitais universitários/ensino — EBSERH e certificados MEC/MS).
+Prever, com antecedência acionável (*ex-ante*) e incerteza calibrada ($P_{50}/P_{90}/P_{95}$), a **necessidade de leitos hospitalares por especialidade específica — UTI Adulto, UTI Pediátrica/Neonatal, Clínico e Cirúrgico — e de contingência (*surge capacity*) em hospitais-escola e suas macrorregiões de saúde**, respondendo à pergunta central: *"diante de um evento climático extremo nesta semana $t$, quantos leitos por especialidade serão necessários em $t+1, t+2, t+3$ e $t+4$ semanas (foco principal em $h = 2$ semanas / D+14)?"*
+
+- **V1 (Escopo Inicial — RS):** Rio Grande do Sul (497 municípios, 7 Macrorregiões de Saúde, bacias hidrográficas críticas e rede de hospitais-escola do RS), distinguindo explicitamente heterogeneidade regional (Região Metropolitana de Porto Alegre / Guaíba / Vales vs. Norte/Serra mais alto) e separando **Onda 1** (D+0 a D+5: trauma, crônicos, evacuações) de **Onda 2** (D+7 a D+28: leptospirose, doenças hídricas e SRAG).
+- **V2 (Expansão Posterior — Brasil):** 27 UFs, 5.570 municípios e rede nacional de hospitais universitários/ensino (EBSERH e certificados MEC/MS), com horizontes multi-escala (15d a 180d) adaptados por bioma.
+
+### Pilares da Abordagem Mista (Dados + Modelagem + Entrega)
+1. **Dados em Duas Trilhas (Incremental):**
+   - *Trilha 1A (Núcleo Semanal RS — entrega imediata):* `CNES (estabelecimento + leito + estabelecimento_ensino)` + `SIH-SUS (agregado semanal sem PII)` + `SINAN (Leptospirose/hídricas)` + `MERGE-CPTEC (100% RS)` + `ANA HidroWeb / Ottobacias` + `S2iD FIDE` + `MapBiomas` + `IBGE/Macrorregiões`.
+   - *Trilha 1B (Enriquecimento Físico e Fila Reprimida — acoplada sem bloquear 1A):* `GERINT-POA` (solicitações/fila real na capital), `ERA5-Land` (umidade do solo + temperatura), `Sentinel-1 SAR / HAND` (inundação física e relevo) e `OSMnx` (bloqueios viários).
+2. **Modelagem Híbrida (Física + Estatística/Bayesiana + Simulação):**
+   - *Hidrologia:* redes profundas com monotonicidade estrutural (`HydroFiLMMonotonicNet` RS / `HydroTFTNet` BR) + propagação montante→jusante.
+   - *Demanda Semanal (Horizonte 1–4 semanas):* modelos com **Defasagem Distribuída (*Distributed Lags*)** (`statsmodels` NegBin/Hurdle + `scikit-learn` Quantílico $P_{50}/P_{90}/P_{95}$ + `PyMC` Hierárquico por Hospital-Escola/Macrorregião) + tempo de permanência (**LOS**) via `scikit-survival`.
+   - *Prontidão:* simulação de filas hospitalares (`SimPy`) convertendo chegadas + LOS em leitos de contingência e adiamento de eletivas.
+3. **Entrega em Fatia Vertical (*Tracer Bullet*):** validar primeiro o pipeline semanal fim a fim da Trilha 1A (com baselines de defasagem distribuída por UTI específica e Macrorregião RS) antes de adicionar complexidade de GNN/SAR/otimização.
 
 > **Fronteira Clínica:** Sistema de pesquisa e planejamento agregado (*"Not for patient care or live clinical use"*). Zero PII; conformidade LGPD na fronteira de dados.
 
