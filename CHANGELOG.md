@@ -8,6 +8,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F06.1 (`audit/data_hygiene.py` — Sensores de Higiene de Dados Cruzados `G1–G8`):**
+  - Implementados 8 gates determinísticos em `src/previsao_leitos/audit/data_hygiene.py`: `G1` (colinearidade `VIF`), `G2` (perda/explosão cartesiana de join), `G3` (conservação física censo diário vs. capacidade CNES), `G4` (detector de censura à direita nas semanas finais), `G5` (razão de diluição espacial MAUP), `G6` (colisão de grade climática com desnível altimétrico), `G7` (pureza `SUTVA` do pool de doadores contrafactuais) e `G8` (trava anti-rótulo degenerado `0 >= 0`), além de `DataHygieneScorecard` com persistência atômica `data_hygiene_scorecard.json` e bloqueio via `DataContractError`.
+  - Cobertura unitária adicionada em `tests/unit/test_audit_data_hygiene.py` reproduzindo as patologias forenses (`C1–C6`, `A8–A9`, `M10`).
 - **Etapa 2 / Feature F03 (`hydrology` — `HydroFiLMMonotonicNet` em PyTorch Lightning CPU):**
   - Implementado `src/previsao_leitos/hydrology/` (`dataset.py` com `IndexedHydroSequenceDataset` 2D sem cruzar lacunas ISO nem vazar features monotônicas no ramo irrestrito; `model.py` com `HydroFiLMMonotonicNet` + `HydroLightningModule` aplicando `F.softplus` a ambas as cabeças `event_logits` e `severity_pred`; `calibration.py` com `TemperatureScaler`).
   - Adicionado extra leve `[hydro]` (`torch` CPU-only via índice `pytorch-cpu` + `lightning`) em `pyproject.toml` e CI.
