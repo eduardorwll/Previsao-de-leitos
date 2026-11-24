@@ -1,5 +1,9 @@
 """Módulo de auditoria estatística, análise contrafactual e relatórios (Feature F06)."""
 
+from previsao_leitos.audit.bsts_counterfactual import (
+    PreShockBstsCounterfactual,
+    recursive_dynamic_do_intervention,
+)
 from previsao_leitos.audit.counterfactual import (
     CounterfactualAccuracyReport,
     NoFloodSyntheticControl,
@@ -75,6 +79,7 @@ __all__ = [
     "HypothesisStatus",
     "ModelScorecard",
     "NoFloodSyntheticControl",
+    "PreShockBstsCounterfactual",
     "PromotionDecision",
     "RatchetCriteria",
     "RatchetEvaluation",
@@ -108,4 +113,5 @@ __all__ = [
     "plot_c5_simpy_contingency",
     "plot_c6_hygiene_scorecard",
     "plot_c7_ablation_delta",
+    "recursive_dynamic_do_intervention",
 ]

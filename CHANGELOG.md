@@ -8,6 +8,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 3 / Feature F06.2 (`audit/bsts_counterfactual.py` — `BSTS` Pré-Choque com `SIVEP-Gripe` e `do()` Recursivo):**
+  - Implementado `PreShockBstsCounterfactual` (regressão estrutural Bayesiana pré-choque com tendência, harmônicos e controle viral `SIVEP-Gripe`, eliminando violação de SUTVA por doadores intra-RS contaminados).
+  - Implementada `recursive_dynamic_do_intervention` propagando `y_origin_cf` recursivamente sob `do(Clima=Climatologia)` e `do(ENSO=Neutro)`.
 - **Etapa 3 / Feature F04.3 (`demand/nowcasting.py` — *Nowcasting* `Chain-Ladder` e LOS Riscos Competitivos):**
   - Implementado `ChainLadderNowcaster` estimando frações de completude $F(d)$ sobre o triângulo de atraso para corrigir censura à direita em competências recentes (`2025–2026+`) com intervalos `nowcast_p10/p50/p90`.
   - Implementado `CompetingRisksLosEstimator` causal (`<= 2022`) separando incidência acumulada (CIF) e permanência média condicional entre alta viva e óbito hospitalar.
