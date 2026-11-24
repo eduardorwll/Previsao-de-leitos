@@ -8,6 +8,8 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Etapa 2–3 / Feature F04.1 (`demand/two_stage.py` — Arquitetura Ortogonal 2 Estágios em Taxa Relativa):**
+  - Implementados `OrthogonalTwoStageOccupancyForecaster` (Estágio 1 basal lento sem `y_origin` curto + Estágio 2 de choque ex-ante monotônico em taxa de ocupação por capacidade instalada, `min_samples_leaf=8` para capturar cauda rara de cheia sem atraso de fase) e `select_demand_forecaster` (roteando automaticamente agravos esparsos para `NegativeBinomialHurdleForecaster`).
 - **Etapa 2–3 / Feature F03.1 (`hydrology` — `HydroFiLM-ENSO` e Gerador *Out-of-Fold* Causal):**
   - Estendida `HydroFiLMMonotonicNet` e `HydroLightningModule` (`hydrology/model.py`) com parâmetro `enso_dim` modulando `FiLM` pelos índices de El Niño/Atlântico Sul preservando `0,00%` de violações monotônicas verificadas via `torch.autograd.grad`.
   - Criado `src/previsao_leitos/hydrology/oof.py` com `audit_autograd_monotonicity` e `generate_causal_hydro_oof_predictions` (validação expansiva anual em `<= 2022` + calibração em `2023`, zero vazamento futuro) para acoplamento direto à `F04.1`.

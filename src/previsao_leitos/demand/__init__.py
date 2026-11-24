@@ -11,6 +11,10 @@ from previsao_leitos.demand.models import (
     PooledRidgeDeltaForecaster,
     QuantileGBDTForecaster,
 )
+from previsao_leitos.demand.two_stage import (
+    OrthogonalTwoStageOccupancyForecaster,
+    select_demand_forecaster,
+)
 
 __all__ = [
     "QUANTILE_COL_NAMES",
@@ -19,8 +23,10 @@ __all__ = [
     "DemandForecaster",
     "GlobalDemandSplits",
     "NegativeBinomialHurdleForecaster",
+    "OrthogonalTwoStageOccupancyForecaster",
     "PooledRidgeDeltaForecaster",
     "QuantileGBDTForecaster",
     "SpecialtyLosEstimator",
     "prepare_global_demand_splits",
+    "select_demand_forecaster",
 ]
