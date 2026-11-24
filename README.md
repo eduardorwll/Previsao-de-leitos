@@ -2,7 +2,7 @@
 
 Relatório de evolução da aplicação de **Deep Learning** e **Modelos Tabulares** na previsão de eventos de enchente e na análise de impacto sobre a oferta de leitos hospitalares no Brasil (2010–2025).
 
-O projeto evoluiu em **3 fases principais**, partindo de um protótipo regional no Rio Grande do Sul até uma auditoria nacional *out-of-time* cruzando dados meteorológicos (INMET), uso do solo (MapBiomas), decretos de desastres (SEDEC), demografia (IBGE) e capacidade hospitalar por especialidade (CNES).
+O projeto evoluiu em **4 fases principais**, partindo de um protótipo regional no Rio Grande do Sul até uma auditoria nacional *out-of-time* cruzando dados meteorológicos (INMET), uso do solo (MapBiomas), decretos de desastres (SEDEC), demografia (IBGE), capacidade hospitalar por especialidade (CNES) e número de internações reais (SIH/SUS).
 
 ---
 
@@ -141,5 +141,3 @@ A auditoria da 3ª fase revelou duas limitações estruturais que motivaram uma 
 - **Limitações conhecidas:** (1) Ausência de séries de **vento superficial** e **cotas fluviométricas (ANA)**, fatores críticos no represamento da Lagoa dos Patos e do Guaíba; e (2) preenchimento parcial da coluna `cid_principal_categoria` na tabela do BigQuery (`304–465` internações/mês no RS), motivo pelo qual as coortes de **Urgência SUS** constituem o resultado principal da auditoria.
 
 > **Conclusão da 4ª Fase:** O acoplamento entre roteamento hidrológico de bacias e demanda real deduplicada do SIH/SUS elimina a persistência ingênua do CNES e demonstra que a rede neural já fornece sinal operacional suficiente para antecipar a pressão sobre leitos SUS (especialmente UTIs de urgência) e dimensionar o rebote pós-enchente.
-
-ivo mensal RS 2024: Nível de Alagamento e Leitos Complementares (Previsto vs. Real)" src="https://github.com/user-attachments/assets/f04dc47f-636d-49a3-8bd4-55a2b1c5cf1c" />
