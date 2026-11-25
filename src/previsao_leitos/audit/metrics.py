@@ -207,8 +207,15 @@ def decision_curve_net_benefit(
 def estimate_surge_probability_from_quantiles(
     preds_df: pl.DataFrame,
     threshold: np.ndarray,
+    *,
+    baseline: np.ndarray | None = None,
+    min_positive_value: float = 1e-9,
 ) -> np.ndarray:
-    """Estima P(Y >= threshold) por interpolação monotônica linear dos quantis P10/P50/P90/P95."""
+    """Estima P(Y >= threshold) por interpolação monotônica linear dos quantis P10/P50/P90/P95.
+
+    Aplica máscara estrutural anti-G8: regiões/linhas sem capacidade ou baseline nulo
+    (`baseline <= min_positive_value` ou `threshold <= min_positive_value`) recebem `0.0`.
+    """
     q_vals = np.column_stack(
         [
             preds_df["pred_p10"].to_numpy().astype(np.float64),
@@ -218,10 +225,17 @@ def estimate_surge_probability_from_quantiles(
         ]
     )
     q_probs = np.array([0.10, 0.50, 0.90, 0.95], dtype=np.float64)
+    base_arr = np.asarray(baseline, dtype=np.float64) if baseline is not None else None
     probs = np.empty(len(threshold), dtype=np.float64)
     for i, thr in enumerate(threshold):
+        thr_val = float(thr)
+        if thr_val <= min_positive_value or (
+            base_arr is not None and float(base_arr[i]) <= min_positive_value
+        ):
+            probs[i] = 0.0
+            continue
         row = q_vals[i]
-        cdf = float(np.interp(float(thr), row, q_probs, left=0.05, right=0.98))
+        cdf = float(np.interp(thr_val, row, q_probs, left=0.05, right=0.98))
         probs[i] = float(np.clip(1.0 - cdf, 0.0, 1.0))
     return probs
 

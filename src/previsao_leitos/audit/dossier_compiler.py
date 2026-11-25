@@ -17,7 +17,6 @@ from __future__ import annotations
 import base64
 import html
 import json
-import platform
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -33,6 +32,7 @@ import polars as pl
 from previsao_leitos.audit.data_hygiene import CLINICAL_DISCLAIMER, DataHygieneScorecard
 from previsao_leitos.audit.hypothesis_ledger import RatchetEvaluation
 from previsao_leitos.audit.plots import plot_c6_hygiene_scorecard, plot_c7_ablation_delta
+from previsao_leitos.audit.report_builder import collect_runtime_manifest_metadata
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -90,39 +90,359 @@ def _df_to_md(df: pl.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def _status_badge_html(val: str) -> str:
+    upper = val.strip().upper()
+    if upper in {"PASS", "PROMOTE", "OK"}:
+        cls = "badge-pass"
+    elif upper in {"WARN"}:
+        cls = "badge-warn"
+    elif upper in {"FAIL", "REJECT"}:
+        cls = "badge-fail"
+    else:
+        return html.escape(val)
+    return f'<span class="badge {cls}">{html.escape(upper)}</span>'
+
+
+def _escape_with_wbr(text: str) -> str:
+    """Escapa HTML inserindo quebra suave após '_' para evitar cortes no meio de palavras."""
+    return html.escape(text).replace("_", "_<wbr>")
+
+
+def _df_to_html_table(df: pl.DataFrame) -> str:
+    cols = df.columns
+    is_wide = len(cols) >= 8
+    headers = "".join(
+        f"<th>{html.escape(str(c).replace('_', ' '))}</th>"
+        for c in cols
+    )
+    body_rows: list[str] = []
+    for row in df.iter_rows():
+        tds: list[str] = []
+        for col, v in zip(cols, row, strict=True):
+            if isinstance(v, float):
+                if not np.isfinite(v):
+                    cell = "—"
+                elif is_wide:
+                    cell = f"{v:.3f}"
+                else:
+                    cell = f"{v:.4f}"
+                tds.append(f'<td class="num">{cell}</td>')
+            elif isinstance(v, int) and not isinstance(v, bool):
+                tds.append(f'<td class="num">{v:,}</td>')
+            else:
+                sval = str(v)
+                if col.lower() in {"status", "decisao", "decision"}:
+                    tds.append(f"<td>{_status_badge_html(sval)}</td>")
+                elif is_wide:
+                    tds.append(f"<td>{_escape_with_wbr(sval)}</td>")
+                else:
+                    tds.append(f"<td>{html.escape(sval)}</td>")
+        body_rows.append("<tr>" + "".join(tds) + "</tr>")
+    cls = "data-table compact" if is_wide else "data-table"
+    return (
+        f"<table class='{cls}'>"
+        f"<thead><tr>{headers}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )
+
+
+def _extract_kpi_cards(
+    *,
+    eval_year: int,
+    hygiene_scorecard: DataHygieneScorecard,
+    benchmark_table: pl.DataFrame,
+    ratchet_evaluation: RatchetEvaluation | None,
+    seed: int,
+) -> list[tuple[str, str, str]]:
+    total_gates = len(hygiene_scorecard.gates)
+    gates_val = f"{hygiene_scorecard.passed_count}/{total_gates} PASS"
+    gates_sub = (
+        f"WARN={hygiene_scorecard.warn_count} | FAIL={hygiene_scorecard.failed_count}"
+    )
+
+    mase_val = "—"
+    mase_sub = "Sem coluna MASE"
+    for mcol in ("mase_vs_pers", "mase"):
+        if mcol in benchmark_table.columns and benchmark_table.height > 0:
+            vals = [
+                float(x)
+                for x in benchmark_table[mcol].to_list()
+                if x is not None and np.isfinite(float(x))
+            ]
+            if vals:
+                best_mase = min(vals)
+                mase_val = f"{best_mase:.3f}"
+                mase_sub = "Menor MASE no benchmark (< 1,00 vence persistência)"
+                break
+
+    cov_val = "—"
+    cov_sub = "Alvo nominal P10-P90: 80%"
+    if "cobertura_p10_p90" in benchmark_table.columns and benchmark_table.height > 0:
+        vals = [
+            float(x)
+            for x in benchmark_table["cobertura_p10_p90"].to_list()
+            if x is not None and np.isfinite(float(x))
+        ]
+        if vals:
+            cov_val = f"{100.0 * vals[-1]:.1f}%"
+            cov_sub = "Cobertura empírica da banda P10-P90"
+
+    p95_val = "—"
+    p95_sub = "Perda quantílica de cauda (P95)"
+    if "pinball_p95" in benchmark_table.columns and benchmark_table.height > 0:
+        vals = [
+            float(x)
+            for x in benchmark_table["pinball_p95"].to_list()
+            if x is not None and np.isfinite(float(x))
+        ]
+        if vals:
+            p95_val = f"{min(vals):.2f}"
+            p95_sub = "Menor Pinball Loss P95 auditada"
+
+    ratchet_val = ratchet_evaluation.decision if ratchet_evaluation else "N/A"
+    ratchet_sub = (
+        f"Vencedor: {ratchet_evaluation.winner_run_id}"
+        if ratchet_evaluation
+        else "Sem comparação Champion-Challenger"
+    )
+
+    holdout_note = (
+        "Holdout 2025 preservado"
+        if eval_year < 2025
+        else f"Auditoria holdout/prospectiva ({eval_year})"
+    )
+    return [
+        ("Higiene de Dados (G1-G8)", gates_val, gates_sub),
+        ("Melhor MASE (vs. Persistência)", mase_val, mase_sub),
+        ("Pinball Loss P95", p95_val, p95_sub),
+        ("Cobertura Empírica P10-P90", cov_val, cov_sub),
+        ("Catraca Champion-Challenger", ratchet_val, ratchet_sub),
+        ("Ano Auditado / Seed", f"{eval_year} (seed {seed})", holdout_note),
+    ]
+
+
 def _render_html_from_dossier(
     *,
     title: str,
-    markdown_text: str,
+    run_id: str,
+    eval_year: int,
+    target_label: str,
+    generated_at: str,
+    seed: int,
+    git_sha: str,
+    hygiene_scorecard: DataHygieneScorecard,
+    benchmark_table: pl.DataFrame,
+    ratchet_evaluation: RatchetEvaluation | None,
+    extra_notes: Sequence[str],
     figure_paths: Sequence[Path],
+    extra_tables: Sequence[tuple[str, pl.DataFrame]] = (),
 ) -> str:
-    escaped_md = html.escape(markdown_text)
+    """Renderiza dossiê em HTML5/CSS3 editorial (padrao-relatorio-tecnico-pdf.md, zero Markdown)."""
+    gate_df = pl.DataFrame(
+        [
+            {
+                "Gate": g.gate_id,
+                "Indicador": g.name,
+                "Status": g.status,
+                "Observado": f"{g.observed_value:.4g} {g.unit}",
+                "Limite": f"<= {g.threshold:.4g} {g.unit}",
+                "Resumo": g.summary,
+            }
+            for g in hygiene_scorecard.gates
+        ]
+    )
+
+    kpis = _extract_kpi_cards(
+        eval_year=eval_year,
+        hygiene_scorecard=hygiene_scorecard,
+        benchmark_table=benchmark_table,
+        ratchet_evaluation=ratchet_evaluation,
+        seed=seed,
+    )
+    kpi_html = "".join(
+        f"<div class='kpi-card'>"
+        f"<div class='kpi-label'>{html.escape(lbl)}</div>"
+        f"<div class='kpi-value'>{html.escape(val)}</div>"
+        f"<div class='kpi-sub'>{html.escape(sub)}</div>"
+        f"</div>"
+        for lbl, val, sub in kpis
+    )
+
+    ratchet_html = (
+        "<div class='callout info'>Sem comparação Champion-Challenger registrada nesta execução."
+        "</div>"
+    )
+    if ratchet_evaluation is not None:
+        delta_df = pl.DataFrame(
+            [
+                {
+                    "Métrica": metric,
+                    "Champion": vals["champion"],
+                    "Challenger": vals["challenger"],
+                    "Delta": vals["delta"],
+                    "Delta (%)": vals["delta_pct"],
+                }
+                for metric, vals in ratchet_evaluation.ablation_delta.items()
+            ]
+        )
+        callout_cls = "success" if ratchet_evaluation.decision == "PROMOTE" else "warn"
+        ratchet_html = (
+            f"<div class='callout {callout_cls}'>"
+            f"<strong>Decisão da Catraca:</strong> "
+            f"{_status_badge_html(ratchet_evaluation.decision)} "
+            f"| <strong>Vencedor:</strong> {html.escape(ratchet_evaluation.winner_run_id)}<br/>"
+            f"{html.escape(ratchet_evaluation.summary)}"
+            f"</div>"
+            + _df_to_html_table(delta_df)
+        )
+
+    extra_tables_html = ""
+    for tbl_title, tbl_df in extra_tables:
+        if not tbl_df.is_empty():
+            extra_tables_html += (
+                f"<h3>{html.escape(tbl_title)}</h3>{_df_to_html_table(tbl_df)}"
+            )
+
+    notes_items = "".join(
+        f"<li>{html.escape(note)}</li>"
+        for note in (
+            extra_notes
+            if extra_notes
+            else ("Execução concluída sob políticas causais congeladas (ADR-0003).",)
+        )
+    )
+
     img_blocks: list[str] = []
-    for fig in figure_paths:
+    for idx, fig in enumerate(figure_paths, start=1):
         if fig.exists():
             b64 = base64.b64encode(fig.read_bytes()).decode("ascii")
+            caption = fig.stem.replace("_", " ").upper()
             img_blocks.append(
-                f'<div class="figure"><h4>{html.escape(fig.name)}</h4>'
-                f'<img src="data:image/png;base64,{b64}" /></div>'
+                f"<figure class='figure'>"
+                f"<img src='data:image/png;base64,{b64}' alt='{html.escape(fig.name)}' />"
+                f"<figcaption><strong>Figura {idx}:</strong> {html.escape(caption)} "
+                f"({html.escape(fig.name)} — paleta Okabe-Ito 300 DPI)</figcaption>"
+                f"</figure>"
             )
     images_html = "\n".join(img_blocks)
+
+    split_policy_note = (
+        f"treino &le; 2022, calibração 2023, auditoria {eval_year}, "
+        "holdout 2025 intocado — ADR-0003"
+        if eval_year < 2025
+        else f"treino &le; 2022, calibração 2023, avaliação holdout/prospectiva "
+        f"{eval_year} — ADR-0003"
+    )
+
     return (
         "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='utf-8'/>"
         f"<title>{html.escape(title)}</title>"
         "<style>"
-        "body{font-family:DejaVu Sans,Arial,sans-serif;margin:28px;color:#111;line-height:1.45;}"
-        "h1{color:#0b3954;border-bottom:2px solid #0b3954;padding-bottom:6px;}"
-        ".banner{background:#fff3cd;border-left:4px solid #d55e00;padding:10px;margin:12px 0;}"
-        "pre{white-space:pre-wrap;font-family:DejaVu Sans Mono,monospace;font-size:10.5px;"
-        "background:#f7f7f7;padding:12px;border-radius:4px;}"
-        ".figure{page-break-inside:avoid;margin:16px 0;text-align:center;}"
-        ".figure img{max-width:96%;height:auto;border:1px solid #ddd;}"
+        "@page{size:A4;margin:15mm 14mm 18mm 14mm;"
+        "@bottom-left{content:'Pesquisa aberta - Not for patient care or live clinical use "
+        "| LGPD n < 5';"
+        "font-family:DejaVu Sans,Arial,sans-serif;font-size:8px;color:#475569;}"
+        "@bottom-right{content:'Página ' counter(page) ' de ' counter(pages);"
+        "font-family:DejaVu Sans,Arial,sans-serif;font-size:8px;color:#475569;}}"
+        "body{font-family:DejaVu Sans,Arial,sans-serif;margin:0;color:#0f172a;"
+        "font-size:10.5px;line-height:1.48;}"
+        ".cover{background:linear-gradient(135deg,#072a40 0%,#0b4a6f 55%,#115e59 100%);"
+        "color:#fff;padding:22px 24px;border-radius:8px;margin-bottom:14px;}"
+        ".cover h1{margin:0 0 6px 0;font-size:19px;letter-spacing:-0.2px;}"
+        ".cover .meta{font-size:9.5px;opacity:0.92;}"
+        ".banner-clinical{background:#fff7ed;border-left:5px solid #d55e00;color:#7c2d12;"
+        "padding:10px 14px;border-radius:4px;margin:10px 0 14px 0;font-size:10px;}"
+        ".kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 18px 0;"
+        "page-break-inside:avoid;}"
+        ".kpi-card{background:#f8fafc;border:1px solid #cbd5e1;border-top:3px solid #0b4a6f;"
+        "border-radius:6px;padding:10px 12px;}"
+        ".kpi-label{font-size:8.5px;text-transform:uppercase;color:#475569;font-weight:700;}"
+        ".kpi-value{font-size:15px;font-weight:700;color:#072a40;margin:4px 0 2px 0;"
+        "font-variant-numeric:tabular-nums;}"
+        ".kpi-sub{font-size:8.5px;color:#64748b;}"
+        "h2.chapter{background:#0b3954;color:#fff;padding:7px 12px;border-radius:4px;"
+        "font-size:12.5px;margin:18px 0 10px 0;page-break-after:avoid;}"
+        "h3{color:#0b4a6f;font-size:11px;margin:12px 0 6px 0;page-break-after:avoid;}"
+        ".data-table{width:100%;border-collapse:collapse;margin:8px 0 14px 0;font-size:9px;"
+        "page-break-inside:avoid;}"
+        ".data-table thead{display:table-header-group;}"
+        ".data-table tr{page-break-inside:avoid;}"
+        ".data-table.compact{table-layout:fixed;font-size:6.8px;}"
+        ".data-table thead th{background:#0b3954;color:#fff;padding:6px 7px;text-align:left;"
+        "font-weight:700;}"
+        ".data-table.compact thead th{padding:4px 2.5px;line-height:1.2;"
+        "word-break:normal;overflow-wrap:break-word;}"
+        ".data-table.compact thead th:first-child,.data-table.compact tbody td:first-child{"
+        "width:22%;}"
+        ".data-table tbody td{padding:5px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top;}"
+        ".data-table.compact tbody td{padding:4px 2.5px;"
+        "word-break:normal;overflow-wrap:break-word;}"
+        ".data-table tbody tr:nth-child(even){background:#f8fafc;}"
+        ".data-table td.num{text-align:right;font-variant-numeric:tabular-nums;}"
+        ".badge{display:inline-block;padding:2px 6px;border-radius:10px;font-size:8px;"
+        "font-weight:700;letter-spacing:0.3px;white-space:nowrap;}"
+        ".chapter-block{page-break-inside:avoid;}"
+        ".badge-pass{background:#dcfce7;color:#166534;}"
+        ".badge-warn{background:#fef3c7;color:#92400e;}"
+        ".badge-fail{background:#fee2e2;color:#991b1b;}"
+        ".callout{padding:10px 12px;border-radius:5px;margin:10px 0;font-size:9.8px;"
+        "page-break-inside:avoid;}"
+        ".callout.info{background:#eff6ff;border-left:4px solid #0072b2;color:#1e3a8a;}"
+        ".callout.warn{background:#fff7ed;border-left:4px solid #d55e00;color:#7c2d12;}"
+        ".callout.success{background:#ecfdf5;border-left:4px solid #009e73;color:#065f46;}"
+        "ul.notes{margin:6px 0 12px 18px;padding:0;}"
+        "ul.notes li{margin:4px 0;}"
+        ".figure{page-break-inside:avoid;margin:14px 0;text-align:center;"
+        "border:1px solid #e2e8f0;border-radius:6px;padding:8px;background:#fff;}"
+        ".figure img{max-width:96%;height:auto;}"
+        ".figure figcaption{font-size:8.8px;color:#334155;margin-top:6px;}"
+        ".page-break{page-break-before:always;}"
         "</style></head><body>"
+        "<header class='cover'>"
         f"<h1>{html.escape(title)}</h1>"
-        f"<div class='banner'><strong>Fronteira Clínica:</strong> "
-        f"{html.escape(CLINICAL_DISCLAIMER)}</div>"
-        f"<pre>{escaped_md}</pre>"
+        f"<div class='meta'><strong>Execução:</strong> {html.escape(run_id)} | "
+        f"<strong>Alvo:</strong> {html.escape(target_label)} | "
+        f"<strong>Ano Auditado:</strong> {eval_year} | "
+        f"<strong>Commit:</strong> {html.escape(git_sha)} | "
+        f"<strong>Gerado (UTC):</strong> {html.escape(generated_at)}</div>"
+        "</header>"
+        "<div class='banner-clinical'><strong>Fronteira Clínica e LGPD:</strong> "
+        f"{html.escape(CLINICAL_DISCLAIMER)} Zero PII de pacientes; agregação na fronteira "
+        "BigQuery/OpenDataSUS com supressão de pequenas células (n &lt; 5 — ADR-0005).</div>"
+        f"<section class='kpi-grid'>{kpi_html}</section>"
+        "<h2 class='chapter'>Capítulo 1 — Escopo Metodológico, Modelos e Contratos Causais</h2>"
+        "<div class='callout info'>Previsão estritamente <em>ex-ante</em> (h = 2 semanas / D+14) "
+        "em séries semanais ISO por Região de Saúde, com restrição monotônica estrutural "
+        "(ADR-0001), acoplamento hidrológico-assistencial (ADR-0006), splits temporais congelados "
+        f"({split_policy_note}) "
+        "e avaliação contrafactual (ADR-0007).</div>"
+        "<h2 class='chapter'>Capítulo 2 — Significado Estatístico e Benchmark Preditivo</h2>"
+        f"{_df_to_html_table(benchmark_table)}"
+        "<section class='chapter-block'>"
+        "<h2 class='chapter'>Capítulo 3 — Rastreabilidade e Scorecard de Higiene "
+        "(Gates G1-G8)</h2>"
+        f"<div class='callout info'><strong>Status Global dos Gates:</strong> "
+        f"{_status_badge_html(hygiene_scorecard.overall_status)} "
+        f"(PASS={hygiene_scorecard.passed_count}, WARN={hygiene_scorecard.warn_count}, "
+        f"FAIL={hygiene_scorecard.failed_count})</div>"
+        f"{_df_to_html_table(gate_df)}"
+        "</section>"
+        "<h2 class='chapter'>Capítulo 4 — Simulações Contrafactuais e Catraca "
+        "Champion-Challenger</h2>"
+        f"{ratchet_html}"
+        f"{extra_tables_html}"
         f"{images_html}"
+        "<section class='chapter-block'>"
+        "<h2 class='chapter'>Capítulo 5 — Arquitetura, Reprodutibilidade e Governança</h2>"
+        f"<ul class='notes'>{notes_items}</ul>"
+        "</section>"
+        "<section class='chapter-block'>"
+        "<h2 class='chapter'>Capítulo 6 — Limitações Auditadas e Próximas Etapas</h2>"
+        "<div class='callout info'>Todos os resultados, falhas de higiene e eventuais rejeições "
+        "da catraca Champion-Challenger são reportados integralmente sem omissão. O artefato "
+        "CAMPEAO é atualizado exclusivamente mediante decisão PROMOTE.</div>"
+        "</section>"
         "</body></html>"
     )
 
@@ -141,6 +461,8 @@ def _render_pdf_via_chromium(html_path: Path, pdf_path: Path) -> bool:
         "--headless=new",
         "--disable-gpu",
         "--no-sandbox",
+        "--no-pdf-header-footer",
+        "--print-to-pdf-no-header",
         f"--print-to-pdf={pdf_path.resolve()}",
         html_path.resolve().as_uri(),
     ]
@@ -149,7 +471,7 @@ def _render_pdf_via_chromium(html_path: Path, pdf_path: Path) -> bool:
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=45,
+            timeout=60,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -210,12 +532,18 @@ def compile_execution_dossier(
     ratchet_evaluation: RatchetEvaluation | None = None,
     extra_figures: Sequence[Path] = (),
     extra_notes: Sequence[str] = (),
+    extra_tables: Sequence[tuple[str, pl.DataFrame]] = (),
     seed: int = 42,
     mirror_champion: bool = False,
     mirror_dir: Path | None = None,
     prefer_chromium: bool = True,
+    device: str = "cpu",
+    gpu_name: str | None = None,
+    cuda_version: str | None = None,
+    precision: str = "fp32",
+    deterministic_mode: str = "strict",
 ) -> DossierArtifacts:
-    """Compila o dossiê completo (.md + .pdf + JSONs + Fig. C1-C7) e espelha o Campeão."""
+    """Compila o dossiê completo (.md + .pdf editorial + JSONs + Fig. C1-C7) e espelha Campeão."""
     run_dir = (runs_root / run_id).resolve()
     fig_dir = run_dir / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
@@ -272,6 +600,11 @@ def compile_execution_dossier(
             + _df_to_md(pl.DataFrame(delta_rows))
         )
 
+    extra_tables_md = ""
+    for tbl_title, tbl_df in extra_tables:
+        if not tbl_df.is_empty():
+            extra_tables_md += f"\n### {tbl_title}\n\n{_df_to_md(tbl_df)}\n"
+
     notes_md = (
         "\n".join(f"- {note}" for note in extra_notes)
         if extra_notes
@@ -279,6 +612,15 @@ def compile_execution_dossier(
     )
     fig_list_md = "\n".join(f"- `{p.name}`" for p in generated_figs)
 
+    runtime_meta = collect_runtime_manifest_metadata(
+        seed=seed,
+        device=device,
+        gpu_name=gpu_name,
+        cuda_version=cuda_version,
+        precision=precision,
+        deterministic_mode=deterministic_mode,
+    )
+    git_sha = str(runtime_meta["git_sha"])
     generated_at = datetime.now(UTC).isoformat()
     md_content = "\n".join(
         [
@@ -286,7 +628,7 @@ def compile_execution_dossier(
             "",
             f"> **Aviso Obrigatório:** {CLINICAL_DISCLAIMER}",
             f"> **Alvo:** `{target_label}` | **Ano Avaliado:** `{eval_year}` | "
-            f"**Gerado em (UTC):** `{generated_at}` | **Seed:** `{seed}`",
+            f"**Commit:** `{git_sha}` | **Gerado em (UTC):** `{generated_at}` | **Seed:** `{seed}`",
             "",
             "---",
             "",
@@ -304,6 +646,7 @@ def compile_execution_dossier(
             "## 3. Catraca Científica Champion-Challenger",
             "",
             ratchet_section,
+            extra_tables_md,
             "",
             "## 4. Notas Metodológicas e Governança (TRIPOD+AI / RECORD)",
             "",
@@ -323,8 +666,18 @@ def compile_execution_dossier(
     html_path = run_dir / "_relatorio_render.html"
     html_text = _render_html_from_dossier(
         title=f"Previsão de Leitos — Dossiê Científico ({run_id})",
-        markdown_text=md_content,
+        run_id=run_id,
+        eval_year=eval_year,
+        target_label=target_label,
+        generated_at=generated_at,
+        seed=seed,
+        git_sha=git_sha,
+        hygiene_scorecard=hygiene_scorecard,
+        benchmark_table=benchmark_table,
+        ratchet_evaluation=ratchet_evaluation,
+        extra_notes=extra_notes,
         figure_paths=generated_figs,
+        extra_tables=extra_tables,
     )
     html_path.write_text(html_text, encoding="utf-8")
 
@@ -344,10 +697,17 @@ def compile_execution_dossier(
     manifest_payload = {
         "run_id": run_id,
         "generated_at_utc": generated_at,
+        "git_sha": git_sha,
+        "python_version": runtime_meta["python_version"],
+        "device": runtime_meta["device"],
+        "gpu_name": runtime_meta["gpu_name"],
+        "cuda_version": runtime_meta["cuda_version"],
+        "precision": runtime_meta["precision"],
+        "deterministic_mode": runtime_meta["deterministic_mode"],
         "eval_year": eval_year,
         "target_label": target_label,
         "seed": seed,
-        "python_version": platform.python_version(),
+        "tools": runtime_meta["tools"],
         "hygiene_overall_status": hygiene_scorecard.overall_status,
         "ratchet_decision": ratchet_evaluation.decision if ratchet_evaluation else None,
         "artifacts": {
@@ -374,8 +734,13 @@ def compile_execution_dossier(
         mirrored_pdf = _atomic_copy(
             pdf_path, target_mirror / f"{run_id}_relatorio_execucao_completo.pdf"
         )
-        _atomic_copy(markdown_path, target_mirror / "CAMPEAO_previsao_leitos_relatorio.md")
-        _atomic_copy(pdf_path, target_mirror / "CAMPEAO_previsao_leitos_relatorio.pdf")
+        # Trava de integridade (Bug J): só sobrescreve CAMPEAO_* sob PROMOTE (ou sem catraca)
+        can_promote_champion = (
+            ratchet_evaluation is None or ratchet_evaluation.decision == "PROMOTE"
+        )
+        if can_promote_champion:
+            _atomic_copy(markdown_path, target_mirror / "CAMPEAO_previsao_leitos_relatorio.md")
+            _atomic_copy(pdf_path, target_mirror / "CAMPEAO_previsao_leitos_relatorio.pdf")
 
     return DossierArtifacts(
         run_dir=run_dir,

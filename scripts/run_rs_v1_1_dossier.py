@@ -1,20 +1,24 @@
-"""Orquestrador reprodutível do Dossiê Final V1.1 RS (Rebate 2024 + El Niño).
+"""Orquestrador reprodutível do Dossiê RS Saneado (V1.2.0 — 8/8 Gates + PDF Editorial).
 
 Executa de ponta a ponta sobre o painel real RS (treino <= 2022, calibração 2023,
-auditoria 2024, holdout 2025 bloqueado):
-- Convolução transitiva multi-salto (F02.2) + teleconexões ENSO (F02.3)
+auditoria 2024, holdout 2025 fisicamente bloqueado):
+- Contrato canônico (`CanonicalPanelSchema`) + integração causal de `CNES` mensal (`<= 2024`)
+- Convolução transitiva multi-salto (F02.2) + teleconexões ENSO causais em t_0 (F02.3)
 - OOF hidrológico causal (F03.1)
-- Arquitetura ortogonal 2 estágios em taxa relativa (F04.1) + Mondrian-EVT (F04.2)
-- Rebate contrafactual duplo 2024 (BSTS Pré-Choque + do() recursivo) + Oráculo El Niño
-- Cluster-bootstrap por bacia hidrográfica (14 clusters)
-- Compilação automática do Dossiê Final (.md + .pdf + Fig. C1-C7 + JSONs) em
-  `reports/runs/rs_v1_1_final_2024/` e espelhamento em `~/Downloads/`.
+- Arquitetura ortogonal 2 estágios saneada (F04.1: Bugs A/B/C corrigidos) + Mondrian-EVT (F04.2)
+- Rebate contrafactual duplo 2024 (`UnobservedComponents` BSTS + `do()` recursivo em W18-30)
+  para AMBOS Champion V1 e Challenger V1.2 (zero métricas hardcoded — Bug F corrigido)
+- Oráculo prospectivo El Niño perturbando colunas-base e `*_lag*` (Bug D corrigido)
+- Scorecard completo de higiene **8/8 Gates (G1-G8)** + cluster-bootstrap por bacia (14 clusters)
+- Compilação automática do Dossiê Editorial HTML5/CSS3 → PDF Chromium (`--print-to-pdf-no-header`,
+  zero Markdown cru, trava `CAMPEAO_*` apenas sob `PROMOTE`).
 
 Fronteira obrigatória: Not for patient care or live clinical use.
 """
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date
 from pathlib import Path
 
@@ -26,8 +30,14 @@ from previsao_leitos.audit import (
     ModelScorecard,
     RatchetCriteria,
     basin_cluster_bootstrap_ci,
+    brier_skill_score,
     check_g1_collinearity_vif,
+    check_g2_join_loss,
+    check_g3_census_capacity_conservation,
     check_g4_right_censoring,
+    check_g5_maup_dilution,
+    check_g6_spatial_grid_collision,
+    check_g7_sutva_donor_purity,
     check_g8_degenerate_surge_labels,
     compile_execution_dossier,
     compile_hygiene_scorecard,
@@ -39,11 +49,13 @@ from previsao_leitos.audit import (
 )
 from previsao_leitos.audit.metrics import estimate_surge_probability_from_quantiles
 from previsao_leitos.demand import (
+    CanonicalPanelSchema,
     ConformalFloodCalibrator,
     MondrianEnsoConformalCalibrator,
     OrthogonalTwoStageOccupancyForecaster,
     QuantileGBDTForecaster,
     prepare_global_demand_splits,
+    validate_canonical_panel_frame,
 )
 from previsao_leitos.geo import (
     RS_BASIN_WEIGHTED_EDGES,
@@ -54,7 +66,7 @@ from previsao_leitos.geo import (
 )
 from previsao_leitos.hydrology import generate_causal_hydro_oof_predictions
 
-# Referência anual/mensal simplificada NOAA CPC ONI (2010-2025) para enriquecimento offline RS
+# Referência anual/mensal NOAA CPC ONI (2010-2024; 2025 excluído de qualquer leitura nesta etapa)
 _NOAA_ONI_BY_YEAR: dict[int, float] = {
     2010: -0.7,
     2011: -0.9,
@@ -71,8 +83,22 @@ _NOAA_ONI_BY_YEAR: dict[int, float] = {
     2022: -0.9,
     2023: 1.1,
     2024: 1.4,
-    2025: -0.2,
 }
+
+_DONOR_REGIONS: tuple[str, ...] = (
+    "Região 11 - Sete Povos das Missões",
+    "Região 15 - Caminho das Águas",
+    "Região 16 - Alto Uruguai Gaúcho",
+    "Região 17 - Planalto",
+    "Região 18 - Araucárias",
+)
+
+
+def _as_float(value: object) -> float:
+    """Converte escalares numéricos de dicionários/Polars com segurança de tipagem estrita."""
+    if isinstance(value, (int, float, np.floating, np.integer)):
+        return float(value)
+    raise TypeError(f"Esperado valor numérico, recebido {type(value).__name__}: {value!r}")
 
 
 def _build_reference_enso_monthly() -> pl.DataFrame:
@@ -90,16 +116,159 @@ def _build_reference_enso_monthly() -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
+def _load_monthly_cnes_uti_by_region(
+    *,
+    raw_dir: Path,
+    max_year: int = 2024,
+) -> pl.DataFrame | None:
+    """Agrega leitos mensais CNES UTI Adulto SUS por Região de Saúde (estritamente <= max_year)."""
+    cnes_files = sorted(raw_dir.glob("cnes_leitos_especialidade_v2_*.parquet"))
+    ibge_files = sorted(raw_dir.glob("ibge_municipios_rs_v1_*.parquet"))
+    if not cnes_files or not ibge_files:
+        return None
+
+    mun_map = (
+        pl.read_parquet(ibge_files[0])
+        .select(["id_municipio", "id_regiao_saude", "nome_regiao_saude"])
+        .unique(subset=["id_municipio"])
+    )
+    cnes = (
+        pl.read_parquet(cnes_files[0])
+        .filter((pl.col("ano") <= max_year) & (pl.col("categoria_leito") == "uti_adulto"))
+        .join(mun_map, on="id_municipio", how="inner")
+        .group_by(["nome_regiao_saude", "ano", "mes"])
+        .agg(
+            pl.col("quantidade_sus").sum().cast(pl.Float64).alias("cnes_uti_sus_leitos"),
+            pl.col("quantidade_existente").sum().cast(pl.Float64).alias("cnes_uti_exist_leitos"),
+        )
+        .with_columns((pl.col("ano") * 100 + pl.col("mes")).alias("_ym"))
+        .sort(["nome_regiao_saude", "_ym"])
+    )
+    return cnes
+
+
+def _attach_causal_monthly_cnes(
+    panel: pl.DataFrame,
+    cnes_monthly: pl.DataFrame | None,
+) -> pl.DataFrame:
+    """Junta capacidade mensal CNES usando competência <= mês da semana (zero vazamento futuro)."""
+    if cnes_monthly is None or cnes_monthly.is_empty():
+        return panel.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("cnes_uti_sus_leitos"),
+            pl.lit(None, dtype=pl.Float64).alias("cnes_uti_exist_leitos"),
+        )
+
+    # Aproxima mês epidemiológico a partir de semana_epi (1..53 -> 1..12) e usa join_asof backward
+    enriched = (
+        panel.with_columns(
+            (
+                pl.col("ano_epi") * 100
+                + (((pl.col("semana_epi") - 1) * 12 // 53) + 1).clip(1, 12)
+            )
+            .cast(pl.Int64)
+            .alias("_ym")
+        )
+        .sort(["nome_regiao_saude", "_ym"])
+        .join_asof(
+            cnes_monthly.with_columns(pl.col("_ym").cast(pl.Int64)),
+            on="_ym",
+            by="nome_regiao_saude",
+            strategy="backward",
+            check_sortedness=False,
+        )
+        .drop("_ym")
+    )
+    return enriched
+
+
+def _compute_maup_vectors(raw_dir: Path, max_year: int = 2022) -> tuple[np.ndarray, np.ndarray]:
+    """Calcula índice urbano bruto (área) vs. ponderado por população (MapBiomas <= max_year)."""
+    mb_path = raw_dir / "mapbiomas_cobertura_rs_1985_2024_v1.parquet"
+    ibge_files = sorted(raw_dir.glob("ibge_municipios_rs_v1_*.parquet"))
+    if not mb_path.exists() or not ibge_files:
+        return np.array([1.0]), np.array([1.0])
+
+    ibge = (
+        pl.read_parquet(ibge_files[0])
+        .filter(pl.col("ano") <= max_year)
+        .sort("ano")
+        .group_by("id_municipio")
+        .agg(
+            pl.col("nome_regiao_saude").last(),
+            pl.col("populacao").last().fill_null(1.0).alias("populacao"),
+        )
+    )
+    mb = (
+        pl.read_parquet(mb_path)
+        .filter(pl.col("ano") == max_year)
+        .group_by("id_municipio")
+        .agg(
+            pl.col("area_ha").sum().alias("area_total"),
+            pl.col("area_ha")
+            .filter(pl.col("nivel_2").str.to_lowercase().str.contains("urban"))
+            .sum()
+            .alias("area_urbana"),
+        )
+        .with_columns(
+            (pl.col("area_urbana") / pl.col("area_total").clip(lower_bound=1e-6)).alias(
+                "frac_urb_mun"
+            )
+        )
+        .join(ibge, on="id_municipio", how="inner")
+    )
+    reg = mb.group_by("nome_regiao_saude").agg(
+        (pl.col("area_urbana").sum() / pl.col("area_total").sum().clip(lower_bound=1e-6)).alias(
+            "raw_area_urb"
+        ),
+        (
+            (pl.col("frac_urb_mun") * pl.col("populacao")).sum()
+            / pl.col("populacao").sum().clip(lower_bound=1e-6)
+        ).alias("pop_weighted_urb"),
+    )
+    return (
+        reg["raw_area_urb"].to_numpy().astype(np.float64),
+        reg["pop_weighted_urb"].to_numpy().astype(np.float64),
+    )
+
+
+def _compute_monotonic_violation_rate(
+    model: object,
+    eval_df: pl.DataFrame,
+    *,
+    bump_cols: tuple[str, ...],
+) -> float:
+    """Audita taxa de violação monotônica (ADR-0001) sob perturbação positiva física."""
+    base_preds = model.predict_quantiles(eval_df)  # type: ignore[attr-defined]
+    mods = [
+        (pl.col(c).cast(pl.Float64) + 25.0).alias(c)
+        for c in bump_cols
+        if c in eval_df.columns
+    ]
+    if not mods:
+        return 0.0
+    bumped_preds = model.predict_quantiles(eval_df.with_columns(mods))  # type: ignore[attr-defined]
+    violations = 0
+    total = 0
+    for qcol in ("pred_p10", "pred_p50", "pred_p90", "pred_p95"):
+        diff = bumped_preds[qcol].to_numpy() - base_preds[qcol].to_numpy()
+        violations += int(np.sum(diff < -1e-6))
+        total += int(diff.size)
+    return float(violations / max(total, 1))
+
+
 def main() -> int:
     panel_path = Path("data/processed/rs_painel_semanal_regioes_v2.parquet")
+    raw_dir = Path("data/raw")
     if not panel_path.exists():
         print(f"[ERRO] Painel não encontrado: {panel_path}")
         return 1
 
     policy = SplitPolicy(train_end_year=2022, cal_year=2023, dev_audit_year=2024, holdout_year=2025)
-    raw_panel = pl.read_parquet(panel_path)
+    # Preservação física absoluta: nunca ler linhas >= holdout_year (2025)
+    raw_panel = pl.read_parquet(panel_path).filter(pl.col("ano_epi") < policy.holdout_year)
+    rows_before_join = raw_panel.height
 
-    # 1. Convolução multi-salto (F02.2) + teleconexões ENSO causais (F02.3)
+    # 1. Convolução multi-salto (F02.2) + teleconexões ENSO causais (F02.3) + CNES mensal
     topo = BasinTopology.from_weighted_edges(RS_BASIN_WEIGHTED_EDGES)
     panel = raw_panel.with_columns(
         pl.col("nome_regiao_saude")
@@ -122,6 +291,10 @@ def main() -> int:
         pl.col("enso_regime").fill_null("neutro"),
     )
 
+    cnes_monthly = _load_monthly_cnes_uti_by_region(raw_dir=raw_dir, max_year=policy.dev_audit_year)
+    panel = _attach_causal_monthly_cnes(panel, cnes_monthly)
+    rows_after_join = panel.height
+
     # 2. Alvo físico de inundação (percentil 95 de chuva multi-salto no treino <= 2022) + OOF F03.1
     rain_p95_tr = float(
         panel.filter(pl.col("ano_epi") <= 2022)["chuva_montante_multihop"].quantile(0.95) or 100.0
@@ -141,21 +314,26 @@ def main() -> int:
         cal_year=2023,
     )
 
-    # Porte regional causal (<= 2022) para Mondrian Conformal
+    # Porte regional causal (<= 2022) + capacidade semanal real CNES mensal (fallback causal)
     porte_map = (
         panel.filter(pl.col("ano_epi") <= 2022)
         .group_by("nome_regiao_saude")
-        .agg(pl.col("uti_adulto_diarias").mean().alias("_mean_uti"))
+        .agg(pl.col("uti_adulto_diarias").mean().alias("_mean_uti_tr"))
         .with_columns(
-            pl.when(pl.col("_mean_uti") >= 250.0)
+            pl.when(pl.col("_mean_uti_tr") >= 250.0)
             .then(pl.lit("grande"))
             .otherwise(pl.lit("interior"))
             .alias("porte_regional"),
-            pl.col("_mean_uti").clip(lower_bound=10.0).alias("capacidade_sem"),
+            pl.col("_mean_uti_tr").clip(lower_bound=10.0).alias("_fallback_cap_sem"),
         )
-        .select(["nome_regiao_saude", "porte_regional", "capacidade_sem"])
+        .select(["nome_regiao_saude", "porte_regional", "_fallback_cap_sem"])
     )
-    panel = panel.join(porte_map, on="nome_regiao_saude", how="left")
+    panel = panel.join(porte_map, on="nome_regiao_saude", how="left").with_columns(
+        pl.when(pl.col("cnes_uti_sus_leitos").is_not_null() & (pl.col("cnes_uti_sus_leitos") > 0.0))
+        .then(pl.col("cnes_uti_sus_leitos") * 7.0)
+        .otherwise(pl.col("_fallback_cap_sem"))
+        .alias("capacidade_sem")
+    )
 
     dyn_cols = (
         "chuva_sem_mm",
@@ -194,60 +372,98 @@ def main() -> int:
         allow_holdout=False,
     )
 
-    # Anexa porte_regional e enso_regime para Mondrian Conformal
-    meta_cols = panel.select(
+    # Bug F corrigido: juntar `enso_regime` na semana de ORIGEM t_0 (ano_epi, semana_epi),
+    # NUNCA na semana-alvo futura (target_ano_epi, target_semana_epi = t_0 + 2)!
+    origin_meta = panel.select(
         ["nome_regiao_saude", "ano_epi", "semana_epi", "porte_regional", "enso_regime", "bacia_id"]
-    ).rename({"ano_epi": "target_ano_epi", "semana_epi": "target_semana_epi"})
+    )
     cal_df = sp_cal.eval_df.join(
-        meta_cols, on=["nome_regiao_saude", "target_ano_epi", "target_semana_epi"], how="left"
+        origin_meta, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
     )
     eval_df = sp_eval.eval_df.join(
-        meta_cols, on=["nome_regiao_saude", "target_ano_epi", "target_semana_epi"], how="left"
+        origin_meta, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
     )
 
-    # 3. Champion V1 (QuantileGBDT + Conformal 2023) vs. Challenger V1.1 (F04.1 + Mondrian-EVT)
-    v1_base = QuantileGBDTForecaster(max_iter=120, max_depth=5, random_state=42).fit(
-        sp_cal.train_df, sp_cal.feature_cols
+    # Validação estrita do Contrato Canônico (CanonicalPanelSchema)
+    schema = CanonicalPanelSchema(
+        entity_col="nome_regiao_saude",
+        capacity_col="capacidade_sem",
+        required_extra_cols=("y_roll12",),
     )
+    validate_canonical_panel_frame(sp_cal.train_df, schema=schema)
+    validate_canonical_panel_frame(cal_df, schema=schema)
+    validate_canonical_panel_frame(eval_df, schema=schema)
+
+    # 3. Champion V1 (QuantileGBDT + Conformal) vs. Challenger V1.2.0 (F04.1 Saneada + Mondrian-EVT)
+    v1_base = QuantileGBDTForecaster(
+        monotone_positive_prefixes=(
+            "chuva_montante_multihop",
+            "chuva_sem_mm",
+            "api_max_sem",
+            "prob_enchente_f03",
+            "severidade_hidro_f03",
+            "remanso_lagunar_idx",
+            "exposicao_aterro_ativa",
+            "el_nino_intensity",
+        ),
+        monotone_negative_prefixes=("frac_floresta",),
+        max_iter=120,
+        max_depth=5,
+        random_state=42,
+    ).fit(sp_cal.train_df, sp_cal.feature_cols)
     v1_cal = ConformalFloodCalibrator(base_model=v1_base).fit_calibration(
         train_df=sp_cal.train_df, cal_df=cal_df
     )
     v1_preds = v1_cal.predict_quantiles(eval_df)
 
-    v11_base = OrthogonalTwoStageOccupancyForecaster(
+    # Bugs A/B/C corrigidos: usa harmônicos canônicos `target_week_sin/cos`, bloqueia AR no
+    # Estágio 2, aplica monotonicidade em `chuva_montante_multihop` e escala heterocedástica
+    v12_base = OrthogonalTwoStageOccupancyForecaster(
         capacity_col="capacidade_sem",
-        basal_cols=("sin_target_wk", "cos_target_wk"),
+        basal_cols=("target_week_sin", "target_week_cos"),
         min_samples_leaf=8,
         random_state=42,
     ).fit(sp_cal.train_df, sp_cal.feature_cols)
-    v11_cal = MondrianEnsoConformalCalibrator(
-        base_model=v11_base,
+    v12_cal = MondrianEnsoConformalCalibrator(
+        base_model=v12_base,
         group_cols=("porte_regional", "enso_regime"),
         use_evt_p95=True,
     ).fit_calibration(cal_df=cal_df)
-    v11_preds = v11_cal.predict_quantiles(eval_df)
+    v12_preds = v12_cal.predict_quantiles(eval_df)
+
+    mono_viol_v1 = _compute_monotonic_violation_rate(
+        v1_cal,
+        eval_df,
+        bump_cols=("chuva_montante_multihop_lag0", "chuva_sem_mm_lag0"),
+    )
+    mono_viol_v12 = _compute_monotonic_violation_rate(
+        v12_cal,
+        eval_df,
+        bump_cols=("chuva_montante_multihop_lag0", "chuva_sem_mm_lag0"),
+    )
 
     eval_v1 = evaluate_probabilistic_predictions(
         eval_df, v1_preds, model_name="V1_QuantileGBDT_Conformal", n_boot=200, seed=42
     )
-    eval_v11 = evaluate_probabilistic_predictions(
-        eval_df, v11_preds, model_name="V1.1_TwoStage_MondrianEVT", n_boot=200, seed=42
+    eval_v12 = evaluate_probabilistic_predictions(
+        eval_df, v12_preds, model_name="V1.2.0_TwoStage_Sanitized_MondrianEVT", n_boot=200, seed=42
     )
-    bench_df = pl.DataFrame([eval_v1, eval_v11])
+    bench_df = pl.DataFrame([eval_v1, eval_v12])
 
     # Cluster-bootstrap por bacia hidrográfica (14 clusters)
-    abs_err_v11 = np.abs(
+    abs_err_v12 = np.abs(
         eval_df["target_y"].to_numpy().astype(np.float64)
-        - v11_preds["pred_p50"].to_numpy().astype(np.float64)
+        - v12_preds["pred_p50"].to_numpy().astype(np.float64)
     )
     basin_ci = basin_cluster_bootstrap_ci(
-        abs_err_v11, eval_df["bacia_id"].cast(pl.String).to_list(), n_boot=400, seed=42
+        abs_err_v12, eval_df["bacia_id"].cast(pl.String).to_list(), n_boot=400, seed=42
     )
 
-    # 4. Rebate contrafactual duplo 2024 + Oráculo prospectivo El Niño
-    rebuttal = run_dual_counterfactual_rebuttal_2024(
-        model=v11_cal,
-        full_panel=panel.with_columns(pl.col("uti_adulto_diarias").alias("target_y")),
+    # 4. Rebate contrafactual duplo 2024 em W18-30 para AMBOS V1 e V1.2 (Bug F corrigido!)
+    full_panel_target = panel.with_columns(pl.col("uti_adulto_diarias").alias("target_y"))
+    rebuttal_v1 = run_dual_counterfactual_rebuttal_2024(
+        model=v1_cal,
+        full_panel=full_panel_target,
         train_df=sp_eval.train_df,
         eval_df=eval_df,
         entity_col="nome_regiao_saude",
@@ -255,34 +471,134 @@ def main() -> int:
         climate_prefixes=("chuva_montante_multihop", "prob_enchente_f03", "remanso_lagunar_idx"),
         neutral_zero_prefixes=("el_nino_intensity",),
         shock_year=2024,
-        shock_weeks=(18, 22),
+        shock_weeks=(18, 30),
     )
-    oracle_df = run_enso_what_if_oracle(model=v11_cal, baseline_eval_df=eval_df)
+    rebuttal_v12 = run_dual_counterfactual_rebuttal_2024(
+        model=v12_cal,
+        full_panel=full_panel_target,
+        train_df=sp_eval.train_df,
+        eval_df=eval_df,
+        entity_col="nome_regiao_saude",
+        target_col="target_y",
+        climate_prefixes=("chuva_montante_multihop", "prob_enchente_f03", "remanso_lagunar_idx"),
+        neutral_zero_prefixes=("el_nino_intensity",),
+        shock_year=2024,
+        shock_weeks=(18, 30),
+    )
+    oracle_df = run_enso_what_if_oracle(model=v12_cal, baseline_eval_df=eval_df)
 
-    # 5. Gates de Higiene + Catraca Champion-Challenger + Dossiê Final (.md + .pdf + ~/Downloads)
+    # Tabela operacional em LEITOS OCUPADOS/DIA (diárias/sem / 7 — padrão PDF editorial)
+    beds_day_df = pl.DataFrame(
+        [
+            {
+                "Modelo": "V1_QuantileGBDT_Conformal",
+                "MAE (leitos/dia)": round(_as_float(eval_v1["mae_p50"]) / 7.0, 2),
+                "Media P50 (leitos/dia)": round(_as_float(v1_preds["pred_p50"].mean()) / 7.0, 2),
+                "Real Obs. (leitos/dia)": round(_as_float(eval_df["target_y"].mean()) / 7.0, 2),
+                "Timing Pico W18-30 (sem.)": round(rebuttal_v1.peak_timing_error_weeks, 2),
+                "Viol. Monotonica (%)": round(100.0 * mono_viol_v1, 2),
+            },
+            {
+                "Modelo": "V1.2.0_TwoStage_Sanitized",
+                "MAE (leitos/dia)": round(_as_float(eval_v12["mae_p50"]) / 7.0, 2),
+                "Media P50 (leitos/dia)": round(_as_float(v12_preds["pred_p50"].mean()) / 7.0, 2),
+                "Real Obs. (leitos/dia)": round(_as_float(eval_df["target_y"].mean()) / 7.0, 2),
+                "Timing Pico W18-30 (sem.)": round(rebuttal_v12.peak_timing_error_weeks, 2),
+                "Viol. Monotonica (%)": round(100.0 * mono_viol_v12, 2),
+            },
+        ]
+    )
+
+    # 5. Calibração de surtos segregada (All / Pos y_roll12 > 0 / Shock W18-28) com máscara anti-G8
     y_true_arr = eval_df["target_y"].to_numpy().astype(np.float64)
     y_roll12_arr = eval_df["y_roll12"].to_numpy().astype(np.float64)
     y_surge = compute_surge_flags(y_true_arr, y_roll12_arr, multiplier=1.10)
     surge_thr = 1.10 * np.maximum(y_roll12_arr, 1e-6)
-    ece_v1 = expected_calibration_error(
-        y_surge, estimate_surge_probability_from_quantiles(v1_preds, surge_thr), n_bins=8
+
+    p_surge_v1 = estimate_surge_probability_from_quantiles(
+        v1_preds, surge_thr, baseline=y_roll12_arr
     )
-    ece_v11 = expected_calibration_error(
-        y_surge, estimate_surge_probability_from_quantiles(v11_preds, surge_thr), n_bins=8
+    p_surge_v12 = estimate_surge_probability_from_quantiles(
+        v12_preds, surge_thr, baseline=y_roll12_arr
     )
+    ece_v1 = expected_calibration_error(y_surge, p_surge_v1, n_bins=8)
+    ece_v12 = expected_calibration_error(y_surge, p_surge_v12, n_bins=8)
+
+    pos_mask = y_roll12_arr > 1e-9
+    shock_mask = pos_mask & eval_df["target_semana_epi"].is_between(18, 28).to_numpy()
+    bss_all_v12 = brier_skill_score(y_surge, p_surge_v12)
+    bss_pos_v12 = brier_skill_score(y_surge[pos_mask], p_surge_v12[pos_mask])
+    bss_shock_v12 = brier_skill_score(y_surge[shock_mask], p_surge_v12[shock_mask])
+
+    # 6. Todos os 8/8 Gates de Higiene (G1-G8)
+    raw_urb, weighted_urb = _compute_maup_vectors(raw_dir, max_year=2022)
+    # G6 real: assinatura empírica da série climática 2024 (detecta colisões reais da grade
+    # NASA POWER 0.5° x 0.625° sem erro de arredondamento sintético 0.5° x 0.5°)
+    p24_clim = panel.filter(pl.col("ano_epi") == 2024).sort(["nome_regiao_saude", "semana_epi"])
+    grid_sig_rows: list[dict[str, str]] = []
+    for reg_key, sub_df in p24_clim.group_by("nome_regiao_saude", maintain_order=True):
+        reg_name = str(reg_key[0]) if isinstance(reg_key, tuple) else str(reg_key)
+        payload = ",".join(
+            f"{float(c):.2f}:{float(a):.2f}"
+            for c, a in zip(
+                sub_df["chuva_sem_mm"].fill_null(-1.0).to_list(),
+                sub_df["api_max_sem"].fill_null(-1.0).to_list(),
+                strict=True,
+            )
+        )
+        sig = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+        grid_sig_rows.append({"nome_regiao_saude": reg_name, "grid_cell_sig": sig})
+    cent_df = pl.DataFrame(grid_sig_rows)
+
+    donor_2024_w18_22 = panel.filter(
+        (pl.col("ano_epi") == 2024)
+        & pl.col("semana_epi").is_between(18, 22)
+        & pl.col("nome_regiao_saude").is_in(list(_DONOR_REGIONS))
+    )
+    cnes_g3_df = panel.filter(
+        (pl.col("ano_epi") == 2024) & pl.col("cnes_uti_sus_leitos").is_not_null()
+    )
+    if cnes_g3_df.is_empty():
+        cnes_g3_df = panel.filter(pl.col("ano_epi") == 2024).with_columns(
+            (pl.col("capacidade_sem") / 7.0).alias("cnes_uti_sus_leitos")
+        )
 
     hygiene_scorecard = compile_hygiene_scorecard(
         [
             check_g1_collinearity_vif(
-                panel.filter(pl.col("ano_epi") <= 2024),
-                ["chuva_sem_mm", "chuva_montante_multihop", "el_nino_intensity"],
+                panel,
+                [
+                    "chuva_sem_mm",
+                    "chuva_montante_multihop",
+                    "api_max_sem",
+                    "el_nino_intensity",
+                    "prob_enchente_f03_oof",
+                    "severidade_hidro_f03_oof",
+                ],
+            ),
+            check_g2_join_loss(rows_before_join, rows_after_join),
+            check_g3_census_capacity_conservation(
+                cnes_g3_df,
+                occupied_col="uti_adulto_diarias",
+                capacity_col="cnes_uti_sus_leitos",
+                days_per_period=7.0,
             ),
             check_g4_right_censoring(
-                panel.filter(pl.col("ano_epi") <= 2024).with_columns(
-                    (pl.col("ano_epi") * 100 + pl.col("semana_epi")).alias("_t")
-                ),
+                panel.with_columns((pl.col("ano_epi") * 100 + pl.col("semana_epi")).alias("_t")),
                 time_col="_t",
                 value_col="uti_adulto_diarias",
+            ),
+            check_g5_maup_dilution(raw_urb, weighted_urb),
+            check_g6_spatial_grid_collision(
+                cent_df,
+                unit_col="nome_regiao_saude",
+                grid_key_col="grid_cell_sig",
+            ),
+            check_g7_sutva_donor_purity(
+                donor_2024_w18_22,
+                unit_col="nome_regiao_saude",
+                shock_col="chuva_sem_mm",
+                capacity_col="capacidade_sem",
             ),
             check_g8_degenerate_surge_labels(y_true_arr, y_roll12_arr, y_surge),
         ]
@@ -290,10 +606,8 @@ def main() -> int:
 
     # Especificidade no interior (semanas sem surto)
     int_mask = (eval_df["porte_regional"].to_numpy() == "interior") & (y_surge < 0.5)
-    p_int_v1 = estimate_surge_probability_from_quantiles(v1_preds, surge_thr)[int_mask]
-    p_int_v11 = estimate_surge_probability_from_quantiles(v11_preds, surge_thr)[int_mask]
-    spec_v1 = float(np.mean(p_int_v1 < 0.5)) if np.any(int_mask) else 1.0
-    spec_v11 = float(np.mean(p_int_v11 < 0.5)) if np.any(int_mask) else 1.0
+    spec_v1 = float(np.mean(p_surge_v1[int_mask] < 0.5)) if np.any(int_mask) else 1.0
+    spec_v12 = float(np.mean(p_surge_v12[int_mask] < 0.5)) if np.any(int_mask) else 1.0
 
     ratchet_eval = ChampionChallengerRatchet(
         RatchetCriteria(min_coverage_p90=0.60, min_interior_specificity=0.65)
@@ -301,51 +615,78 @@ def main() -> int:
         champion=ModelScorecard(
             run_id="rs_v1_baseline",
             model_name="V1_QuantileGBDT_Conformal",
-            mase=float(eval_v1["mase_vs_pers"]),
-            pinball_p95=float(eval_v1["pinball_p95"]),
-            coverage_p90=float(eval_v1["cobertura_p10_p90"]),
-            peak_timing_error_weeks=2.0,
+            mase=_as_float(eval_v1["mase_vs_pers"]),
+            pinball_p95=_as_float(eval_v1["pinball_p95"]),
+            coverage_p90=_as_float(eval_v1["cobertura_p10_p90"]),
+            peak_timing_error_weeks=rebuttal_v1.peak_timing_error_weeks,
             interior_specificity=spec_v1,
             ece=ece_v1,
         ),
         challenger=ModelScorecard(
-            run_id="rs_v1_1_final_2024",
-            model_name="V1.1_TwoStage_MondrianEVT",
-            mase=float(eval_v11["mase_vs_pers"]),
-            pinball_p95=float(eval_v11["pinball_p95"]),
-            coverage_p90=float(eval_v11["cobertura_p10_p90"]),
-            peak_timing_error_weeks=rebuttal.peak_timing_error_weeks,
-            interior_specificity=spec_v11,
-            ece=ece_v11,
+            run_id="rs_v1_2_0_sanitized_2024",
+            model_name="V1.2.0_TwoStage_Sanitized_MondrianEVT",
+            mase=_as_float(eval_v12["mase_vs_pers"]),
+            pinball_p95=_as_float(eval_v12["pinball_p95"]),
+            coverage_p90=_as_float(eval_v12["cobertura_p10_p90"]),
+            peak_timing_error_weeks=rebuttal_v12.peak_timing_error_weeks,
+            interior_specificity=spec_v12,
+            ece=ece_v12,
             hygiene_failed_gates=hygiene_scorecard.failed_count,
         ),
     )
 
     dossier = compile_execution_dossier(
         runs_root=Path("reports/runs"),
-        run_id="rs_v1_1_final_2024",
+        run_id="rs_v1_2_0_sanitized_2024",
         eval_year=2024,
-        target_label="uti_adulto_diarias (RS 2024 — V1.1 Rebate Duplo + El Niño)",
+        target_label="uti_adulto_diarias (RS 2024 — V1.2.0 Saneamento + 8/8 Gates + PDF Editorial)",
         benchmark_table=bench_df,
         hygiene_scorecard=hygiene_scorecard,
         ratchet_evaluation=ratchet_eval,
+        extra_tables=(
+            ("Desempenho Operacional em Leitos Ocupados/Dia (Diárias / 7)", beds_day_df),
+            ("Oráculo Prospectivo El Niño (Perturbação Base + *_lag*)", oracle_df),
+            (
+                "Rebate Contrafactual Duplo W18-30 (BSTS Local-Level vs. do() Recursivo)",
+                rebuttal_v12.summary_table,
+            ),
+        ),
         extra_notes=(
-            f"MAE V1.1 (cluster-bootstrap 14 bacias): "
-            f"{basin_ci.point:.2f} [IC 95%: {basin_ci.low:.2f}; {basin_ci.high:.2f}]",
-            f"Especificidade no interior: V1={spec_v1:.1%} -> V1.1={spec_v11:.1%}",
-            f"Rebate 2024 (BSTS vs do() recursivo): "
-            f"obs={rebuttal.shock_excess_obs_mean:+.1f} | "
-            f"pred={rebuttal.shock_excess_pred_mean:+.1f} | "
-            f"erro timing pico={rebuttal.peak_timing_error_weeks:.2f} sem.",
+            f"MAE V1.2.0 (cluster-bootstrap 14 bacias): "
+            f"{basin_ci.point:.2f} diárias/sem ({basin_ci.point / 7.0:.2f} leitos/dia) "
+            f"[IC 95%: {basin_ci.low:.2f}; {basin_ci.high:.2f}]",
+            f"Violação monotônica auditada (ADR-0001): "
+            f"V1={100.0 * mono_viol_v1:.2f}% | V1.2.0={100.0 * mono_viol_v12:.2f}%",
+            f"Viés BSTS pré-choque W15-17/2024 (UnobservedComponents local-level): "
+            f"{rebuttal_v12.pre_shock_bias:+.2f} diárias/sem",
+            f"Rebate W18-30/2024 (V1.2.0): excesso obs={rebuttal_v12.shock_excess_obs_mean:+.1f} | "
+            f"excesso pred={rebuttal_v12.shock_excess_pred_mean:+.1f} | "
+            f"timing pico V1={rebuttal_v1.peak_timing_error_weeks:.2f} vs "
+            f"V1.2.0={rebuttal_v12.peak_timing_error_weeks:.2f} sem.",
             f"Oráculo El Niño (P50 médio neutro -> super El Niño): "
             f"{oracle_df['demanda_p50_media'][0]:.2f} -> {oracle_df['demanda_p50_media'][-1]:.2f}",
+            f"BSS Surtos V1.2.0 (máscara anti-G8): All={bss_all_v12:+.4f} | "
+            f"Pos(y_roll12>0)={bss_pos_v12:+.4f} | Shock(W18-28)={bss_shock_v12:+.4f} | "
+            f"ECE={ece_v12:.4f}",
+            f"Especificidade no interior (sem surto): V1={spec_v1:.1%} -> V1.2.0={spec_v12:.1%}",
         ),
         seed=42,
         mirror_champion=True,
     )
-    print(f"[OK] Dossiê Final V1.1 RS emitido: {dossier.markdown_path}")
-    print(f"[OK] PDF compilado: {dossier.pdf_path}")
+    print(f"[OK] Dossiê V1.2.0 RS emitido: {dossier.markdown_path}")
+    print(f"[OK] PDF Editorial compilado: {dossier.pdf_path}")
     print(f"[OK] Espelho Downloads: {dossier.mirrored_pdf_path}")
+    print(
+        f"[OK] 8/8 Gates reportados ({len(hygiene_scorecard.gates)}): "
+        f"PASS={hygiene_scorecard.passed_count}, WARN={hygiene_scorecard.warn_count}, "
+        f"FAIL={hygiene_scorecard.failed_count}"
+    )
+    print(f"[OK] Violação monotônica V1.2.0: {100.0 * mono_viol_v12:.2f}%")
+    print(f"[OK] Viés BSTS W15-17: {rebuttal_v12.pre_shock_bias:+.2f} diárias/sem")
+    print(
+        f"[OK] Oráculo El Niño P50: "
+        f"{oracle_df['demanda_p50_media'][0]:.2f} -> {oracle_df['demanda_p50_media'][-1]:.2f}"
+    )
     print(f"[OK] Decisão Catraca: {ratchet_eval.decision} ({ratchet_eval.summary})")
     return 0
 

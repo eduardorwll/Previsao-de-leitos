@@ -39,6 +39,15 @@ class HospitalReadinessConfig:
             raise DataContractError(
                 f"elective_share deve estar em [0, 1] (recebido {self.elective_share})."
             )
+        if not (0.0 <= self.elective_deferral_frac <= 1.0):
+            raise DataContractError(
+                f"elective_deferral_frac deve estar em [0, 1] "
+                f"(recebido {self.elective_deferral_frac})."
+            )
+        if self.surge_lead_time_days < 0:
+            raise DataContractError(
+                f"surge_lead_time_days deve ser >= 0 (recebido {self.surge_lead_time_days})."
+            )
         if not (0.0 <= self.polder_hospital_loss_frac < 0.8):
             raise DataContractError(
                 f"polder_hospital_loss_frac fora de [0, 0.8): {self.polder_hospital_loss_frac}"
@@ -68,6 +77,35 @@ class CounterfactualReadinessComparison:
     overload_days_saved: int
 
 
+def _resolve_exogenous_flood_days(
+    weekly_schedule: pl.DataFrame,
+    *,
+    flood_indicator_col: str | None = "em_cheia_hidro",
+) -> set[int]:
+    """Determina dias de perda de pôlder usando indicador hidrológico exógeno quando disponível.
+
+    Elimina circularidade com a demanda hospitalar (`Bug J`): se `flood_indicator_col`
+    estiver presente em `weekly_schedule` (booleano ou 0/1), usa-o diretamente; caso
+    contrário, recorre ao fallback de compatibilidade sobre `chegadas_semanais`.
+    """
+    flood_days: set[int] = set()
+    if flood_indicator_col is not None and flood_indicator_col in weekly_schedule.columns:
+        flags = weekly_schedule[flood_indicator_col].cast(pl.Float64).fill_null(0.0).to_list()
+        for wk_idx, flag in enumerate(flags):
+            if float(flag) > 0.5:
+                for d in range(wk_idx * 7, (wk_idx + 1) * 7):
+                    flood_days.add(d)
+        return flood_days
+
+    arrivals_weekly = weekly_schedule["chegadas_semanais"].to_list()
+    median_arrivals = float(np.median(arrivals_weekly)) if arrivals_weekly else 0.0
+    for wk_idx, arr_w in enumerate(arrivals_weekly):
+        if float(arr_w) > 1.25 * max(median_arrivals, 1.0):
+            for d in range(wk_idx * 7, (wk_idx + 1) * 7):
+                flood_days.add(d)
+    return flood_days
+
+
 def _run_single_simpy_policy(
     *,
     weekly_schedule: pl.DataFrame,
@@ -76,13 +114,12 @@ def _run_single_simpy_policy(
     daily_arrivals_urgent: list[int],
     daily_arrivals_elective: list[int],
     daily_los_samples: list[list[float]],
+    flood_indicator_col: str | None = "em_cheia_hidro",
 ) -> PolicySimulationResult:
     """Executa simulação de eventos discretos em `simpy.Environment` com stream compartilhado."""
     n_weeks = weekly_schedule.height
     n_days = n_weeks * 7
     pred_p90_weekly = weekly_schedule["previsao_p90_semanal"].to_list()
-    arrivals_weekly = weekly_schedule["chegadas_semanais"].to_list()
-    median_arrivals = float(np.median(arrivals_weekly)) if arrivals_weekly else 0.0
 
     # Capacidade máxima no recurso SimPy = base + surge; leitos indisponíveis são bloqueados
     max_capacity = config.base_beds + config.surge_beds
@@ -94,12 +131,11 @@ def _run_single_simpy_policy(
     surge_requested_day: int | None = None
     polder_loss_beds = round(config.base_beds * config.polder_hospital_loss_frac)
 
-    # Semanas de pico físico (usado para ativar perda em pôlder durante a cheia real)
-    flood_days: set[int] = set()
-    for wk_idx, arr_w in enumerate(arrivals_weekly):
-        if float(arr_w) > 1.25 * max(median_arrivals, 1.0):
-            for d in range(wk_idx * 7, (wk_idx + 1) * 7):
-                flood_days.add(d)
+    # Dias de cheia hidrológica exógena (ativa perda em pôlder sem proxy circular de demanda)
+    flood_days = _resolve_exogenous_flood_days(
+        weekly_schedule,
+        flood_indicator_col=flood_indicator_col,
+    )
 
     wait_times_days: list[float] = []
     deferred_count = 0
@@ -134,20 +170,25 @@ def _run_single_simpy_policy(
         for day in range(n_days):
             wk_idx = day // 7
             pred_p90 = float(pred_p90_weekly[wk_idx])
+            # Em modo proativo (h=2), antecipa o pedido de surge `surge_lead_time_days` antes
+            lookahead_wk = min(n_weeks - 1, (day + config.surge_lead_time_days) // 7)
+            pred_p90_lookahead = float(pred_p90_weekly[lookahead_wk])
             in_flood_day = day in flood_days
             active_polder_loss = polder_loss_beds if in_flood_day else 0
 
-            # Capacidade efetiva disponível hoje
-            eff_beds = config.base_beds - active_polder_loss + (
-                config.surge_beds if surge_active else 0
+            # Capacidade efetiva antes da atualização de estado de hoje (para detectar crise)
+            eff_beds_prev = max(
+                1,
+                config.base_beds - active_polder_loss + (config.surge_beds if surge_active else 0),
             )
-            eff_beds = max(1, eff_beds)
-            occ_now = in_bed_patients / max(1, eff_beds)
+            occ_now = in_bed_patients / eff_beds_prev
 
             # Política de acionamento de contingência com histerese segura sobre leitos BASE
             base_eff = max(1, config.base_beds - active_polder_loss)
             crisis_now = occ_now >= 0.95 or waiting_patients > 0
-            forecast_alert = pred_p90 >= 0.90 * base_weekly_capacity
+            forecast_alert_now = pred_p90 >= 0.90 * base_weekly_capacity
+            forecast_alert_lead = pred_p90_lookahead >= 0.90 * base_weekly_capacity
+            forecast_alert = forecast_alert_now or forecast_alert_lead
             below_base_safe = in_bed_patients < 0.85 * base_eff and waiting_patients == 0
             if policy_mode == "proactive_h2":
                 trigger_on = forecast_alert or crisis_now
@@ -161,9 +202,18 @@ def _run_single_simpy_policy(
                     surge_requested_day = day
                 if day - surge_requested_day >= config.surge_lead_time_days:
                     surge_active = True
+            elif not trigger_on and not surge_active:
+                # Limpa pedido pendente se o alerta cessou antes de concluir o lead_time
+                surge_requested_day = None
             elif safe_to_close and surge_active:
                 surge_active = False
                 surge_requested_day = None
+
+            # Recalcula capacidade efetiva de hoje já refletindo ativação/desativação de surge
+            eff_beds = max(
+                1,
+                config.base_beds - active_polder_loss + (config.surge_beds if surge_active else 0),
+            )
 
             # Bloqueia leitos não-ativos durante o dia inteiro (surge inativo + perda por pôlder)
             blocked_today = (0 if surge_active else config.surge_beds) + active_polder_loss
@@ -229,15 +279,19 @@ def simulate_counterfactual_readiness(
     config: HospitalReadinessConfig,
     *,
     seed: int = 42,
+    flood_indicator_col: str | None = "em_cheia_hidro",
 ) -> CounterfactualReadinessComparison:
     """Executa comparação contrafactual `proactive_h2` vs. `reactive_h0` com Common Random Numbers.
 
-    `weekly_schedule` deve conter colunas `chegadas_semanais` e `previsao_p90_semanal`.
+    `weekly_schedule` deve conter colunas `chegadas_semanais` e `previsao_p90_semanal`
+    (e opcionalmente `em_cheia_hidro` para ativação exógena de perda de pôlder).
     """
     required = ("chegadas_semanais", "previsao_p90_semanal")
     missing = [c for c in required if c not in weekly_schedule.columns]
     if missing:
         raise DataContractError(f"Colunas ausentes em weekly_schedule: {missing}")
+    if weekly_schedule.is_empty():
+        raise DataContractError("weekly_schedule vazio em simulate_counterfactual_readiness.")
 
     rng = np.random.default_rng(seed)
     daily_urgent: list[int] = []
@@ -263,6 +317,7 @@ def simulate_counterfactual_readiness(
         daily_arrivals_urgent=daily_urgent,
         daily_arrivals_elective=daily_elective,
         daily_los_samples=daily_los,
+        flood_indicator_col=flood_indicator_col,
     )
     proactive = _run_single_simpy_policy(
         weekly_schedule=weekly_schedule,
@@ -271,6 +326,7 @@ def simulate_counterfactual_readiness(
         daily_arrivals_urgent=daily_urgent,
         daily_arrivals_elective=daily_elective,
         daily_los_samples=daily_los,
+        flood_indicator_col=flood_indicator_col,
     )
 
     if reactive.peak_queue_patients > 0:

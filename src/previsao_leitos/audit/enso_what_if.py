@@ -70,6 +70,11 @@ class DualRebuttalSummary:
     shock_excess_mae: float
     peak_timing_error_weeks: float
     summary_table: pl.DataFrame
+    pre_shock_bias: float = 0.0
+
+
+def _matches_prefix(col: str, prefixes: tuple[str, ...]) -> bool:
+    return any(col == p or col.startswith(f"{p}_lag") for p in prefixes)
 
 
 def run_enso_what_if_oracle(
@@ -78,9 +83,35 @@ def run_enso_what_if_oracle(
     baseline_eval_df: pl.DataFrame,
     scenarios: Sequence[EnsoScenarioSpec] = DEFAULT_ENSO_SCENARIOS,
 ) -> pl.DataFrame:
-    """Simula cenários prospectivos de El Niño preservando monotonicidade física."""
+    """Simula cenários prospectivos de El Niño perturbando colunas-base e defasadas (`*_lag*`)."""
     if baseline_eval_df.is_empty():
         raise DataContractError("baseline_eval_df vazio em run_enso_what_if_oracle.")
+    if not scenarios:
+        raise DataContractError("scenarios vazio em run_enso_what_if_oracle.")
+
+    enso_cols = [
+        c
+        for c in baseline_eval_df.columns
+        if _matches_prefix(c, ("el_nino_intensity", "oni_c"))
+    ]
+    rain_cols = [
+        c
+        for c in baseline_eval_df.columns
+        if _matches_prefix(
+            c,
+            ("chuva_montante_pond", "chuva_montante_multihop", "chuva_sem_mm"),
+        )
+    ]
+    prob_cols = [
+        c
+        for c in baseline_eval_df.columns
+        if _matches_prefix(c, ("prob_enchente_f03_oof", "prob_enchente_f03"))
+    ]
+    sev_cols = [
+        c
+        for c in baseline_eval_df.columns
+        if _matches_prefix(c, ("severidade_hidro_f03_oof", "severidade_hidro_f03"))
+    ]
 
     rows: list[dict[str, object]] = []
     neutral_p50: float | None = None
@@ -88,22 +119,25 @@ def run_enso_what_if_oracle(
 
     for scen in scenarios:
         mods: list[pl.Expr] = []
-        if "el_nino_intensity" in baseline_eval_df.columns:
-            mods.append(pl.lit(scen.el_nino_intensity, dtype=pl.Float64).alias("el_nino_intensity"))
-        if "oni_c_lag4" in baseline_eval_df.columns:
-            mods.append(pl.lit(scen.el_nino_intensity, dtype=pl.Float64).alias("oni_c_lag4"))
-        if "chuva_montante_pond_lag0" in baseline_eval_df.columns:
+        for col in enso_cols:
+            mods.append(pl.lit(scen.el_nino_intensity, dtype=pl.Float64).alias(col))
+        for col in rain_cols:
             mods.append(
-                (pl.col("chuva_montante_pond_lag0").cast(pl.Float64) * scen.rain_multiplier).alias(
-                    "chuva_montante_pond_lag0"
-                )
+                (pl.col(col).cast(pl.Float64) * scen.rain_multiplier).alias(col)
             )
-        if "prob_enchente_f03_oof" in baseline_eval_df.columns:
+        for col in prob_cols:
             mods.append(
-                pl.col("prob_enchente_f03_oof")
+                pl.col(col)
                 .cast(pl.Float64)
                 .clip(lower_bound=scen.flood_prob_floor, upper_bound=1.0)
-                .alias("prob_enchente_f03_oof")
+                .alias(col)
+            )
+        for col in sev_cols:
+            mods.append(
+                pl.max_horizontal(
+                    pl.col(col).cast(pl.Float64) * scen.rain_multiplier,
+                    pl.lit(scen.flood_prob_floor, dtype=pl.Float64),
+                ).alias(col)
             )
 
         scen_df = baseline_eval_df.with_columns(mods) if mods else baseline_eval_df.clone()
@@ -145,7 +179,7 @@ def run_dual_counterfactual_rebuttal_2024(
     climate_prefixes: Sequence[str] = (),
     neutral_zero_prefixes: Sequence[str] = (),
     shock_year: int = 2024,
-    shock_weeks: tuple[int, int] = (18, 22),
+    shock_weeks: tuple[int, int] = (18, 30),
     horizon_weeks: int = 2,
 ) -> DualRebuttalSummary:
     """Executa rebate contrafactual duplo: BSTS Pré-Choque vs. do() dinâmico recursivo."""
@@ -169,6 +203,7 @@ def run_dual_counterfactual_rebuttal_2024(
         entity_col=entity_col,
         horizon_weeks=horizon_weeks,
         intervention_start_week=shock_weeks[0],
+        intervention_start_year=shock_year,
         climate_prefixes=climate_prefixes,
         neutral_zero_prefixes=neutral_zero_prefixes,
     )
@@ -190,6 +225,20 @@ def run_dual_counterfactual_rebuttal_2024(
         )
     )
 
+    pre_win = merged.filter(
+        pl.col("target_semana_epi").is_between(max(1, shock_weeks[0] - 3), shock_weeks[0] - 1)
+    )
+    pre_bias = (
+        float(
+            np.mean(
+                pre_win["y_cf_no_flood"].to_numpy().astype(np.float64)
+                - pre_win[target_col].to_numpy().astype(np.float64)
+            )
+        )
+        if not pre_win.is_empty()
+        else 0.0
+    )
+
     shock = merged.filter(pl.col("target_semana_epi").is_between(shock_weeks[0], shock_weeks[1]))
     if shock.is_empty():
         raise DataContractError("Janela de choque vazia no rebate contrafactual duplo.")
@@ -204,8 +253,16 @@ def run_dual_counterfactual_rebuttal_2024(
     for ent in sorted(shock[entity_col].unique().to_list()):
         sub = shock.filter(pl.col(entity_col) == ent)
         if sub.height >= 2:
-            wk_obs = int(sub.sort("excess_obs", descending=True)["target_semana_epi"][0])
-            wk_pred = int(sub.sort("excess_pred_do", descending=True)["target_semana_epi"][0])
+            wk_obs = int(
+                sub.sort(["excess_obs", "target_semana_epi"], descending=[True, False])[
+                    "target_semana_epi"
+                ][0]
+            )
+            wk_pred = int(
+                sub.sort(["excess_pred_do", "target_semana_epi"], descending=[True, False])[
+                    "target_semana_epi"
+                ][0]
+            )
             timing_errs.append(abs(float(wk_pred - wk_obs)))
     timing_err = float(np.mean(timing_errs)) if timing_errs else 0.0
 
@@ -213,6 +270,7 @@ def run_dual_counterfactual_rebuttal_2024(
         [
             {
                 "janela": f"Choque Sem. {shock_weeks[0]}-{shock_weeks[1]} ({shock_year})",
+                "vies_pre_choque_bsts": round(pre_bias, 4),
                 "excesso_obs_bsts_medio": round(obs_mean, 4),
                 "excesso_pred_do_medio": round(pred_mean, 4),
                 "mae_excesso": round(mae_ex, 4),
@@ -227,4 +285,5 @@ def run_dual_counterfactual_rebuttal_2024(
         shock_excess_mae=mae_ex,
         peak_timing_error_weeks=timing_err,
         summary_table=summary_table,
+        pre_shock_bias=pre_bias,
     )

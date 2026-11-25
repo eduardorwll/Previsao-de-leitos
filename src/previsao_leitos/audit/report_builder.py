@@ -71,6 +71,38 @@ def _safe_git_sha() -> str:
         return "unknown"
 
 
+def collect_runtime_manifest_metadata(
+    *,
+    seed: int = 42,
+    device: str = "cpu",
+    gpu_name: str | None = None,
+    cuda_version: str | None = None,
+    precision: str = "fp32",
+    deterministic_mode: str = "strict",
+) -> dict[str, object]:
+    """Coleta metadados canônicos de reprodutibilidade para `run_manifest.json` (lazy)."""
+    tools = {
+        "python": platform.python_version(),
+        "polars": _safe_pkg_version("polars"),
+        "numpy": _safe_pkg_version("numpy"),
+        "scipy": _safe_pkg_version("scipy"),
+        "scikit-learn": _safe_pkg_version("scikit-learn"),
+        "statsmodels": _safe_pkg_version("statsmodels"),
+        "matplotlib": _safe_pkg_version("matplotlib"),
+    }
+    return {
+        "git_sha": _safe_git_sha(),
+        "python_version": platform.python_version(),
+        "device": device,
+        "gpu_name": gpu_name,
+        "cuda_version": cuda_version,
+        "precision": precision,
+        "deterministic_mode": deterministic_mode,
+        "seed": seed,
+        "tools": tools,
+    }
+
+
 def _df_to_markdown(df: pl.DataFrame) -> str:
     cols = df.columns
     header = "| " + " | ".join(cols) + " |"
@@ -146,28 +178,31 @@ def build_verification_report(
         fig_list.append(fig_c5)
     figures = tuple(fig_list)
 
-    tools = {
-        "python": platform.python_version(),
-        "polars": _safe_pkg_version("polars"),
-        "numpy": _safe_pkg_version("numpy"),
-        "scipy": _safe_pkg_version("scipy"),
-        "scikit-learn": _safe_pkg_version("scikit-learn"),
-        "statsmodels": _safe_pkg_version("statsmodels"),
-        "matplotlib": _safe_pkg_version("matplotlib"),
-    }
-    git_sha = _safe_git_sha()
+    runtime_meta = collect_runtime_manifest_metadata(seed=seed)
+    raw_tools = runtime_meta["tools"]
+    tools: dict[str, str] = (
+        {str(k): str(v) for k, v in raw_tools.items()} if isinstance(raw_tools, dict) else {}
+    )
+    git_sha = str(runtime_meta["git_sha"])
     generated_at = datetime.now(tz=UTC).isoformat()
 
     manifest = {
         "run_id": run_id,
         "generated_at_utc": generated_at,
         "git_sha": git_sha,
+        "python_version": runtime_meta["python_version"],
+        "device": runtime_meta["device"],
+        "gpu_name": runtime_meta["gpu_name"],
+        "cuda_version": runtime_meta["cuda_version"],
+        "precision": runtime_meta["precision"],
+        "deterministic_mode": runtime_meta["deterministic_mode"],
         "eval_year": eval_year,
         "train_end_year": active_policy.train_end_year,
         "holdout_year": active_policy.holdout_year,
         "seed": seed,
         "target_label": target_label,
         "clinical_boundary": _CLINICAL_BOUNDARY_NOTE,
+        "disclaimer": _CLINICAL_BOUNDARY_NOTE,
         "tools": tools,
         "counterfactual_metrics": {
             "shock_excess_mae": counterfactual_report.shock_excess_mae,

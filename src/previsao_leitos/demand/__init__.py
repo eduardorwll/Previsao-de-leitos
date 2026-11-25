@@ -1,7 +1,12 @@
 """Módulo de modelagem probabilística de demanda, calibração conformal e LOS (Feature F04)."""
 
 from previsao_leitos.demand.calibration import ConformalFloodCalibrator
-from previsao_leitos.demand.datasets import GlobalDemandSplits, prepare_global_demand_splits
+from previsao_leitos.demand.datasets import (
+    CanonicalPanelSchema,
+    GlobalDemandSplits,
+    prepare_global_demand_splits,
+    validate_canonical_panel_frame,
+)
 from previsao_leitos.demand.extreme_uncertainty import (
     ExtremeValueGpdTail,
     HierarchicalBasinBayesShrinkage,
@@ -30,6 +35,7 @@ from previsao_leitos.demand.two_stage import (
 __all__ = [
     "QUANTILE_COL_NAMES",
     "QUANTILE_LEVELS",
+    "CanonicalPanelSchema",
     "ChainLadderNowcaster",
     "CompetingRisksLosEstimator",
     "CompetingRisksSummary",
@@ -47,4 +53,5 @@ __all__ = [
     "SpecialtyLosEstimator",
     "prepare_global_demand_splits",
     "select_demand_forecaster",
+    "validate_canonical_panel_frame",
 ]

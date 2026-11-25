@@ -94,6 +94,15 @@ class MondrianEnsoConformalCalibrator:
     def model_name(self) -> str:
         return f"{self._base.model_name} + MondrianConformal-EVT"
 
+    def fit(
+        self,
+        train_df: pl.DataFrame,
+        feature_cols: Sequence[str],
+    ) -> MondrianEnsoConformalCalibrator:
+        """Ajusta o modelo base subjacente (compatibilidade com o protocolo `DemandForecaster`)."""
+        self._base.fit(train_df, feature_cols)
+        return self
+
     @staticmethod
     def _finite_q(scores: np.ndarray, alpha: float) -> float:
         n = len(scores)
