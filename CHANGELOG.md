@@ -8,6 +8,9 @@ Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores (
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 
 ### Added
+- **Documentação / Relatório de Estado Atual, Plano `V1.2 RS → V2 Brasil` e Guia de Migração (`docs/RELATORIO_ESTADO_ATUAL.md`, `docs/features/08-plano-v1-2-v2-workstation-colab.md`):**
+  - Consolidado o diagnóstico forense quantitativo da base `V1.1` (`RS <= 2024`, holdout `2025` intocado), mapeando os `10` defeitos estruturais (`two_stage`, `oof`, `bsts`, `enso_what_if`, `dossier_compiler`, `simulator`, `queries` e `BSS_surge`) e o status dos `8` Gates (`G1–G8`).
+  - Documentada a arquitetura de execução em `3` camadas (`Tier 0 CI CPU-only`, `Tier 1 Workstation Arch Linux / i5-12400F / 32 GB RAM / AMD RX 7500 ROCm / 1 TB NVMe`, `Tier 2 expansão opcional Google Colab NVIDIA`), a transição detalhada da `F03.1` semanal → diária (`60–90` dias) e o passo a passo de migração de máquina.
 - **Documentação / Diretriz Canônica de Relatórios em PDF (`docs/guides/padrao-relatorio-tecnico-pdf.md`):**
   - Formalizado o modelo oficial de relatório técnico-científico em PDF do projeto (diagramação editorial HTML5/CSS3 via Chromium headless, proibição de sintaxe Markdown crua, estrutura em Capa + 6 Capítulos, gráficos 300 DPI paleta Okabe-Ito, rastreabilidade de bases, simulações contrafactuais em leitos ocupados/dia e checklist de auditoria pré-entrega).
 - **Etapa 3 / Fechamento V1.1 RS (`audit/metrics.py` + `scripts/run_rs_v1_1_dossier.py` — Cluster-Bootstrap por Bacia e Dossiê Final V1.1):**

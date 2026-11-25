@@ -13,8 +13,8 @@
 | **Etapa 0** | Fundação do Pacote, Segurança, Qualidade e Documentação Base | ✅ Concluída | `100%` | CI verde (`ruff`, `mypy`, `pytest 100%`, `pip-audit`) + pacote `domain` + catálogo de dados |
 | **Etapa 1** | Arquitetura Modular, Ingestão Parametrizada e Base RS (Hospitais-Escola) | 🔄 Em andamento | `85%` | 100% dos 497 mun. RS + catálogo HUs + SIH-SUS agregado sem PII + *Tracer Bullet* semanal + testes de vazamento zero |
 | **Etapa 2** | Pivô Científico RS: Demanda Real, LOS e Hidrologia Calibrada | ✅ Concluída (V1 RS) | `100%` | `F03 HydroFiLMMonotonicNet` (`autograd 0,00%`, `BSS=+0,076`) + `F04` (`NegBinHurdle 0,710`, `QuantileGBDT 0,820`) + LOS causal |
-| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | ✅ V1.1 RS Concluída | `100%` (V1.1) | **Plano Diretor V1.1 RS concluído** (Fases 1–4: Higiene `G1–G8`, Catraca, Dossiê `.md`/`.pdf`, `F01.1–F06.2`, `HydroFiLM-ENSO`, `BSTS`, `Nowcasting`; `2025` pronto para auditoria final) |
-| **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas |
+| **Etapa 3** | Incerteza Bayesiana, Simulação de Filas (`SimPy`) e Auditoria RS (2024/2025) | 🔄 Em andamento (`V1.2 RS`) | `75%` | V1.1 RS concluída e auditada (`10` defeitos forenses mapeados); saneamento `V1.2 RS` (`1.2.0–1.2.6`, `8/8` Gates, `BSS_pos >= +0,10`) + Holdout `M2` (`2025` + `2026`) |
+| **Etapa 4** | Escala Nacional Brasil (27 UFs, ST-GNN, `HydroTFTNet` e Otimização Pareto) | ⏳ Planejada | `0%` | **V2 Brasil validada** via *Leave-UF-Out* e *Leave-Basin-Out* em todos os biomas (Workstation Arch/ROCm + expansão opcional Google Colab NVIDIA) |
 | **Etapa 5** | Governança TRIPOD+AI / RECORD, Publicação e Release `v1.0.0` | ⏳ Planejada | `0%` | Checklists completos, reprodutibilidade fim a fim e relatório técnico aberto |
 
 ---
@@ -31,6 +31,7 @@
 | **F05 — Prontidão, Filas Hospitalares e Gatilhos (`readiness`)** | [05-prontidao-e-filas-simpy.md](features/05-prontidao-e-filas-simpy.md) | ✅ Concluída (V1 RS) | `ConformalFloodCalibrator` (`2023`, `0,00%` viol.), simulador de eventos discretos `SimPy` (estresse pôlder `15%`, redução de **`-36,8%`** no pico de fila e **`16`** dias de sobrecarga evitados em POA), gatilhos observáveis e `Fig. C5` |
 | **F06 — Auditoria Estatística, Análise Contrafactual e Relatório (`audit`)** | [06-auditoria-contrafactual-e-relatorio.md](features/06-auditoria-contrafactual-e-relatorio.md) | ✅ Fase 1 V1.1 Concluída | Controle sintético, placebo, `do()`, `Fig. C1–C7`, sensores `G1–G8` (`data_hygiene.py`), catraca *Champion-Challenger* (`hypothesis_ledger.py`) e **dossiê automático `.md` + `.pdf`** (`dossier_compiler.py`) |
 | **F07 — CLI e Orquestração Reprodutível (`cli`)** | [07-cli-e-governanca.md](features/07-cli-e-governanca.md) | ✅ Concluída (V1 RS) | Comando instalável `previsao-leitos` (`doctor`, `verify-rs`), logging JSON estruturado, Net Benefit (`BSS=+0,088`, `ECE=0,049`), seção TRIPOD+AI/PROBAST+AI/RECORD e bloqueio de `2025` |
+| **F08 — Evolução `V1.2 RS → V2 Brasil`, Transição Diária `F03.1` e Arquitetura Híbrida** | [08-plano-v1-2-v2-workstation-colab.md](features/08-plano-v1-2-v2-workstation-colab.md) | ⏳ Planejada | Relatório de Estado Atual ([RELATORIO_ESTADO_ATUAL.md](RELATORIO_ESTADO_ATUAL.md)), roteiro `1.2.0–2.4`, empacotamento `cpu`/`rocm`/`cuda` e expansão opcional Google Colab NVIDIA |
 
 ---
 
@@ -83,13 +84,15 @@
 - [x] **Fase 4 / Task 4.2 (`F06.2`):** implementar bateria de rebate contrafactual duplo 2024 e oráculo prospectivo de cenários El Niño (`audit/enso_what_if.py`: `run_dual_counterfactual_rebuttal_2024` + `run_enso_what_if_oracle`)
 - [x] **Fase 4 / Task 4.3:** implementar `basin_cluster_bootstrap_ci` (14 clusters de bacia) e `scripts/run_rs_v1_1_dossier.py`, emitindo o Dossiê Final V1.1 RS (`.md` + `.pdf` em `reports/runs/rs_v1_1_final_2024/` e espelhado em `~/Downloads/`) com `2025` preservado intocado
 - [x] **Padrão Editorial de Relatório Técnico PDF:** publicar diretriz canônica em [docs/guides/padrao-relatorio-tecnico-pdf.md](guides/padrao-relatorio-tecnico-pdf.md) (HTML5/CSS3 → Chromium headless, zero Markdown cru, 6 capítulos obrigatórios e simulações em leitos ocupados/dia)
-- [ ] Ajustar modelo hierárquico Bayesiano (`PyMC`: `Hospital-Escola ⊂ Macrorregião RS`) + explicabilidade `SHAP` auditada
-- [ ] Executar avaliação final única no holdout `2025` e emitir o **Relatório Final de Verificação Científica V1 RS** (`verificacao_cientifica.md` + `run_manifest.json` + `Fig. C1–C5` + Net Benefit)
+- [x] **Auditoria Forense V1.1 e Relatório de Estado Atual (`docs/RELATORIO_ESTADO_ATUAL.md`):** Mapeados quantitativamente os `10` defeitos estruturais da V1.1 (`RS <= 2024`, `2025` intocado), desenhada a arquitetura em `3` camadas (`CI CPU` + `Workstation Arch/i5-12400F/32 GB/RX 7500` + `Google Colab NVIDIA`) e publicado o plano `F08` ([08-plano-v1-2-v2-workstation-colab.md](features/08-plano-v1-2-v2-workstation-colab.md))
+- [ ] **Ciclo `V1.2 RS` (`1.2.0–1.2.6` → `Marco M1`):** Saneamento dos `10` bugs V1.1 + reextração BigQuery `v3` + fontes ao vivo Onda 2A/2B + transição `F03.1` semanal → diária (`60–90d`) + calibração de surtos (`BSS_pos >= +0,10`, `AgACI`/`SPCI`) + Pareto `NSGA-II` (`SimPy` CRN 2 estágios) + `SHAP 0.54.1` + experimento `PyMC 6.3.2` + `nutpie` + PDF Editorial #1
+- [ ] **Marco `M2` (`1.3.0`):** Executar avaliação final única congelada (`v1.2.0-rs-frozen`) no holdout (`2025` classificado sob PROBAST+AI + `2026` prospectivo virgem com `ChainLadderNowcaster`) e emitir PDF Editorial #2
 
 ### ⏳ Etapa 4 — Escala Nacional Brasil (27 UFs e Rede Nacional de Hospitais-Escola)
-- [ ] Escalar ingestão e cubos espaciais para 5.570 municípios e 27 UFs (`polars` + `dask`)
-- [ ] Treinar `HydroTFTNet` multi-escala (janelas 15d–180d) + Hetero-GNN (`torch-geometric`) acoplando bacias e fluxos inter-hospitalares
-- [ ] Executar validação espacial *Leave-UF-Out* e *Leave-Basin-Out* por bioma/porte/SUS e otimização multiobjetivo (`pymoo` NSGA-II/III)
+- [ ] **Task 2.1:** Escalar ingestão e cubos espaciais para `5.570` municípios e `27` UFs exclusivamente com **`Polars 2.1.0`** em 2 níveis (passe global interestadual `< 16 GiB` + modo streaming portátil `< 6 GiB`; remover `dask` de `pyproject.toml`)
+- [ ] **Task 2.2:** Implementar LOS dinâmico com riscos competitivos via **Hazard Discreto Agregado no BigQuery (`statsmodels` MIT)** preservando LGPD (`ADR-0005`) e removendo `scikit-survival` (GPL-3.0) de `pyproject.toml`
+- [ ] **Task 2.3:** Executar validação espacial *Leave-UF-Out* (`27` folds) e *Leave-Basin-Out* (`12` folds / `6` biomas) comparando `F04.1`, `Hetero-ST-GNN` (`PyG 2.8.1`), `HydroTFTNet` (`ADR-0004`) e `TimesFM 2.5` (benchmark externo isolado), com suporte opcional ao Tier 2 **Google Colab NVIDIA**
+- [ ] **Task 2.4:** Otimização multiobjetivo nacional (`pymoo` `NSGA-III` 4 objetivos + `SimPy` CRN 2 estágios) + `SHAP 0.54.1` nacional + PDF Editorial #3 (`Marco M3`)
 
 ### ⏳ Etapa 5 — Governança TRIPOD+AI / RECORD e Publicação
 - [ ] Completar checklists **TRIPOD+AI**, **PROBAST+AI** e **RECORD** com diagrama de atrito amostral e tabelas por subgrupo

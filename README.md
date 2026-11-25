@@ -10,7 +10,9 @@ Projeto de **pesquisa aberta** voltado à previsão *ex-ante* da **necessidade d
 
 | Documento | Finalidade |
 | :--- | :--- |
+| **[Relatório de Estado Atual e Migração](docs/RELATORIO_ESTADO_ATUAL.md)** | Diagnóstico forense quantitativo (`V1.1`), arquitetura em 3 camadas (`CI` / `Workstation Arch + AMD ROCm` / `Google Colab`) e guia passo a passo para continuar em outra máquina |
 | **[Mapa de Progresso (Etapas e Features)](docs/PROGRESSO.md)** | Acompanhamento consolidado etapa por etapa e feature por feature com marcação de progresso |
+| **[Feature F08 — Evolução V1.2 RS → V2 Brasil](docs/features/08-plano-v1-2-v2-workstation-colab.md)** | Transição detalhada `F03.1` semanal → diária (`60–90d`), empacotamento `cpu`/`rocm`/`cuda` e expansão Google Colab |
 | **[Feature F00 — Domínio e Fundação](docs/features/00-dominio-e-fundacao.md)** | Tipos validados (`CodigoCNES`, `CodigoMunicipioIBGE`, `CodigoUF`, `CompetenciaMensal`), exceções e qualidade base |
 | **[Feature F01 — Ingestão Segura e LGPD](docs/features/01-ingestao-segura.md)** | Módulo `ingestion` validado em dados reais RS (`2010–2025`): CNES UTI específica + hospitais-escola, SIH semanal (`COALESCE` CID-10) e LGPD |
 | **[Feature F02 — Geo, Hidrologia 100% RS e Tracer Bullet](docs/features/02-geo-hidrologia-rs.md)** | Módulo `geo` concluído: grade calendário 30/30 Regiões RS (`NASA POWER` + `ERA5-Land` + DAG de bacias + aterros/pôlderes + `W_ref`) e ablação 2024 ($h=1..4$ sem.) |
