@@ -149,6 +149,9 @@ GROUP BY
     semana_epi
 """
 
+# Nota empirica BigQuery (inspect_columns + sonda 2024-05 em basedosdados.br_ms_sih.aihs_reduzidas):
+# A coluna `sigla_uf` nessa tabela e INT64 e 100% NULL; portanto o filtro seguro por UF
+# permanece `STARTS_WITH(id_municipio_estabelecimento, @uf_code)`.
 _SQL_SIH_ACTIVE_CENSUS = """
 WITH base AS (
     SELECT
@@ -157,17 +160,13 @@ WITH base AS (
         data_internacao,
         LEAST(
             GREATEST(
-                COALESCE(
-                    data_saida,
-                    DATE_ADD(
-                        data_internacao,
-                        INTERVAL GREATEST(IFNULL(quantidade_dias_permanencia, 1) - 1, 0) DAY
-                    )
-                ),
-                data_internacao
+                IF(data_saida > data_internacao, DATE_DIFF(data_saida, data_internacao, DAY), 0),
+                IFNULL(quantidade_dias_permanencia, 1),
+                IFNULL(quantidade_dias_uti_mes, 0),
+                1
             ),
-            DATE_ADD(data_internacao, INTERVAL 180 DAY)
-        ) AS data_fim_efetiva,
+            180
+        ) AS n_dias_ativos,
         CASE
             WHEN tipo_uti IN ('51', '74', '75', '76', '83', '85', '86') THEN 'uti_adulto'
             WHEN tipo_uti IN ('52', '77', '78', '79') THEN 'uti_pediatrica'
@@ -179,22 +178,14 @@ WITH base AS (
             ELSE 'outros'
         END AS especialidade,
         CASE
-            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3) = 'A27'
-                THEN 'leptospirose'
-            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
-                BETWEEN 'A00' AND 'A09'
-                OR LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3) = 'B15'
+            WHEN LEFT(cid_principal_categoria, 3) = 'A27' THEN 'leptospirose'
+            WHEN LEFT(cid_principal_categoria, 3) BETWEEN 'A00' AND 'A09'
+                OR LEFT(cid_principal_categoria, 3) = 'B15'
                 THEN 'infecciosas_hidricas'
-            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
-                BETWEEN 'S00' AND 'T98'
-                THEN 'trauma'
-            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
-                BETWEEN 'J00' AND 'J99'
-                THEN 'respiratorio'
-            WHEN LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
-                BETWEEN 'I00' AND 'I99'
-                OR LEFT(COALESCE(cid_principal_subcategoria, cid_principal_categoria), 3)
-                BETWEEN 'N17' AND 'N19'
+            WHEN LEFT(cid_principal_categoria, 3) BETWEEN 'S00' AND 'T98' THEN 'trauma'
+            WHEN LEFT(cid_principal_categoria, 3) BETWEEN 'J00' AND 'J99' THEN 'respiratorio'
+            WHEN LEFT(cid_principal_categoria, 3) BETWEEN 'I00' AND 'I99'
+                OR LEFT(cid_principal_categoria, 3) BETWEEN 'N17' AND 'N19'
                 THEN 'cardiovascular_renal'
             ELSE 'outros'
         END AS grupo_cid,
@@ -204,7 +195,7 @@ WITH base AS (
         END AS carater_atendimento,
         GREATEST(IFNULL(quantidade_dias_uti_mes, 0), 0) AS diarias_uti_aih
     FROM `basedosdados.br_ms_sih.aihs_reduzidas`
-    WHERE ano BETWEEN @ano_inicio AND @ano_fim
+    WHERE ano BETWEEN @ano_inicio - 1 AND @ano_fim + 1
       AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
       AND data_internacao IS NOT NULL
       AND id_estabelecimento_cnes IS NOT NULL
@@ -221,11 +212,16 @@ expanded AS (
         1.0 AS paciente_dia,
         SAFE_DIVIDE(
             CAST(b.diarias_uti_aih AS FLOAT64),
-            CAST(DATE_DIFF(b.data_fim_efetiva, b.data_internacao, DAY) + 1 AS FLOAT64)
+            CAST(b.n_dias_ativos AS FLOAT64)
         ) AS diaria_uti_dia,
         b.ano_cmpt
     FROM base AS b,
-    UNNEST(GENERATE_DATE_ARRAY(b.data_internacao, b.data_fim_efetiva)) AS dia_ativo
+    UNNEST(
+        GENERATE_DATE_ARRAY(
+            b.data_internacao,
+            DATE_ADD(b.data_internacao, INTERVAL (b.n_dias_ativos - 1) DAY)
+        )
+    ) AS dia_ativo
 )
 SELECT
     id_estabelecimento_cnes,
@@ -239,6 +235,7 @@ SELECT
     SUM(IFNULL(diaria_uti_dia, 0.0)) AS diarias_uti_ativas,
     MAX(ano_cmpt) AS ano_cmpt_max
 FROM expanded
+WHERE ano_epi BETWEEN @ano_inicio AND @ano_fim
 GROUP BY
     id_estabelecimento_cnes,
     ano_epi,
@@ -256,8 +253,8 @@ SELECT
     COUNT(*) AS internacoes_urgencia_total,
     SUM(GREATEST(IFNULL(quantidade_dias_uti_mes, 0), 0)) AS diarias_uti_total
 FROM `basedosdados.br_ms_sih.aihs_reduzidas`
-WHERE ano BETWEEN @ano_inicio AND @train_end_year
-  AND EXTRACT(ISOYEAR FROM data_internacao) <= @train_end_year
+WHERE ano BETWEEN @ano_inicio AND @train_end_year + 1
+  AND EXTRACT(ISOYEAR FROM data_internacao) BETWEEN @ano_inicio AND @train_end_year
   AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
   AND data_internacao IS NOT NULL
   AND id_estabelecimento_cnes IS NOT NULL
@@ -272,6 +269,47 @@ GROUP BY
     id_municipio_estabelecimento_6d,
     id_estabelecimento_cnes
 HAVING COUNT(*) >= @min_cell_count
+"""
+
+_SQL_SIH_DELAY_TRIANGLE = """
+WITH incremental AS (
+    SELECT
+        EXTRACT(ISOYEAR FROM data_internacao) AS ano_epi,
+        EXTRACT(ISOWEEK FROM data_internacao) AS semana_epi,
+        GREATEST(
+            0,
+            LEAST(
+                @max_delay_weeks,
+                CAST(FLOOR(DATE_DIFF(DATE(ano, mes, 28), data_internacao, DAY) / 7.0) AS INT64)
+            )
+        ) AS delay_weeks,
+        COUNT(*) AS incremental_count
+    FROM `basedosdados.br_ms_sih.aihs_reduzidas`
+    WHERE ano BETWEEN @ano_inicio AND @ano_fim + 1
+      AND STARTS_WITH(id_municipio_estabelecimento, @uf_code)
+      AND data_internacao IS NOT NULL
+      AND mes BETWEEN 1 AND 12
+    GROUP BY
+        ano_epi,
+        semana_epi,
+        delay_weeks
+)
+SELECT
+    ano_epi,
+    semana_epi,
+    delay_weeks,
+    incremental_count,
+    SUM(incremental_count) OVER (
+        PARTITION BY ano_epi, semana_epi
+        ORDER BY delay_weeks
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS cumulative_count
+FROM incremental
+WHERE ano_epi BETWEEN @ano_inicio AND @ano_fim
+ORDER BY
+    ano_epi,
+    semana_epi,
+    delay_weeks
 """
 
 _SQL_IBGE_MUNICIPIOS = """
@@ -392,7 +430,7 @@ def build_sih_referral_flows_query(*, uf: CodigoUF, ano_inicio: int, ano_fim: in
 def build_sih_active_census_query(
     *, uf: CodigoUF, ano_inicio: int, ano_fim: int
 ) -> QuerySpec:
-    """Retorna QuerySpec parametrizada de censo ativo semanal SIH-SUS ([DT_INTER..DT_SAIDA])."""
+    """Retorna QuerySpec parametrizada de censo ativo semanal SIH-SUS (sem double-count +1)."""
     return QuerySpec(
         name="sih_censo_ativo_semanal",
         sql=_SQL_SIH_ACTIVE_CENSUS,
@@ -401,7 +439,7 @@ def build_sih_active_census_query(
             QueryParam("ano_inicio", "INT64", ano_inicio),
             QueryParam("ano_fim", "INT64", ano_fim),
         ),
-        schema_version="v1",
+        schema_version="v2",
         expected_columns=(
             "id_estabelecimento_cnes",
             "ano_epi",
@@ -434,13 +472,41 @@ def build_sih_external_referral_matrix_query(
             QueryParam("train_end_year", "INT64", train_end_year),
             QueryParam("min_cell_count", "INT64", min_cell_count),
         ),
-        schema_version="v1",
+        schema_version="v2",
         expected_columns=(
             "id_municipio_residencia_6d",
             "id_municipio_estabelecimento_6d",
             "id_estabelecimento_cnes",
             "internacoes_urgencia_total",
             "diarias_uti_total",
+        ),
+    )
+
+
+def build_sih_delay_triangle_query(
+    *,
+    uf: CodigoUF,
+    ano_inicio: int = 2020,
+    ano_fim: int = 2026,
+    max_delay_weeks: int = 12,
+) -> QuerySpec:
+    """Retorna QuerySpec do triângulo de atraso de processamento SIH para ChainLadderNowcaster."""
+    return QuerySpec(
+        name="sih_delay_triangle",
+        sql=_SQL_SIH_DELAY_TRIANGLE,
+        params=(
+            QueryParam("uf_code", "STRING", str(uf)),
+            QueryParam("ano_inicio", "INT64", ano_inicio),
+            QueryParam("ano_fim", "INT64", ano_fim),
+            QueryParam("max_delay_weeks", "INT64", max_delay_weeks),
+        ),
+        schema_version="v1",
+        expected_columns=(
+            "ano_epi",
+            "semana_epi",
+            "delay_weeks",
+            "incremental_count",
+            "cumulative_count",
         ),
     )
 

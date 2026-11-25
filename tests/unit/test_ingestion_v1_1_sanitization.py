@@ -20,8 +20,10 @@ from previsao_leitos.ingestion.schemas import (
 def test_sih_active_census_query_uses_date_expansion_and_params() -> None:
     spec = build_sih_active_census_query(uf=CodigoUF("43"), ano_inicio=2010, ano_fim=2026)
     assert spec.name == "sih_censo_ativo_semanal"
-    assert spec.schema_version == "v1"
+    assert spec.schema_version == "v2"
     assert "GENERATE_DATE_ARRAY" in spec.sql
+    assert "@ano_inicio - 1 AND @ano_fim + 1" in spec.sql
+    assert "n_dias_ativos - 1" in spec.sql
     assert "@uf_code" in spec.sql
     assert "@ano_inicio" in spec.sql
     assert "@ano_fim" in spec.sql

@@ -22,6 +22,9 @@ from previsao_leitos.ingestion.queries import (
     build_cnes_beds_by_specialty_query,
     build_cnes_teaching_hospitals_query,
     build_ibge_municipios_query,
+    build_sih_active_census_query,
+    build_sih_delay_triangle_query,
+    build_sih_external_referral_matrix_query,
     build_sih_referral_flows_query,
     build_sih_weekly_demand_query,
 )
@@ -29,6 +32,9 @@ from previsao_leitos.ingestion.schemas import (
     validate_cnes_beds_frame,
     validate_cnes_teaching_hospitals_frame,
     validate_ibge_municipios_frame,
+    validate_sih_active_census_frame,
+    validate_sih_delay_triangle_frame,
+    validate_sih_external_referral_matrix_frame,
     validate_sih_referral_flows_frame,
     validate_sih_weekly_demand_frame,
 )
@@ -85,11 +91,15 @@ def extract_rs_core_health_pack(
     *,
     source: TabularSourcePort,
     config: IngestionConfig,
+    include_v3_sih: bool = False,
+    train_end_year: int = 2022,
+    delay_start_year: int = 2020,
+    max_delay_weeks: int = 12,
 ) -> dict[str, IngestionResult]:
     """Executa a ingestão completa da Trilha 1A (Saúde & Demografia) com cache e LGPD."""
     cache = AtomicParquetCache(root_dir=config.data_dir / "raw")
 
-    tasks: tuple[tuple[QuerySpec, ValidatorFn, tuple[str, ...], tuple[str, ...]], ...] = (
+    tasks: list[tuple[QuerySpec, ValidatorFn, tuple[str, ...], tuple[str, ...]]] = [
         (
             build_cnes_teaching_hospitals_query(
                 uf=config.uf, ano_inicio=config.ano_inicio, ano_fim=config.ano_fim
@@ -130,8 +140,101 @@ def extract_rs_core_health_pack(
             (),
             (),
         ),
-    )
+    ]
 
+    if include_v3_sih:
+        tasks.extend(
+            [
+                (
+                    build_sih_active_census_query(
+                        uf=config.uf, ano_inicio=config.ano_inicio, ano_fim=config.ano_fim
+                    ),
+                    validate_sih_active_census_frame,
+                    ("internacoes_iniciadas",) if config.suppress_demand_microstrata else (),
+                    ("id_estabelecimento_cnes", "ano_epi", "semana_epi"),
+                ),
+                (
+                    build_sih_external_referral_matrix_query(
+                        uf=config.uf,
+                        ano_inicio=config.ano_inicio,
+                        train_end_year=train_end_year,
+                        min_cell_count=config.min_cell_count,
+                    ),
+                    validate_sih_external_referral_matrix_frame,
+                    (),
+                    (),
+                ),
+                (
+                    build_sih_delay_triangle_query(
+                        uf=config.uf,
+                        ano_inicio=delay_start_year,
+                        ano_fim=max(config.ano_fim, 2026),
+                        max_delay_weeks=max_delay_weeks,
+                    ),
+                    validate_sih_delay_triangle_frame,
+                    ("incremental_count",),
+                    ("ano_epi", "semana_epi"),
+                ),
+            ]
+        )
+
+    results: dict[str, IngestionResult] = {}
+    for spec, validator, lgpd_counts, lgpd_strata in tasks:
+        results[spec.name] = _ingest_one(
+            source=source,
+            cache=cache,
+            spec=spec,
+            validator=validator,
+            config=config,
+            lgpd_count_columns=lgpd_counts,
+            lgpd_stratum_columns=lgpd_strata,
+        )
+    return results
+
+
+def extract_rs_v3_sih_pack(
+    *,
+    source: TabularSourcePort,
+    config: IngestionConfig,
+    train_end_year: int = 2022,
+    delay_start_year: int = 2020,
+    delay_end_year: int = 2026,
+    max_delay_weeks: int = 12,
+) -> dict[str, IngestionResult]:
+    """Extrai exclusivamente as 3 tabelas SIH v3 (censo ativo, W_ref externa, triângulo atraso)."""
+    cache = AtomicParquetCache(root_dir=config.data_dir / "raw")
+    tasks: tuple[tuple[QuerySpec, ValidatorFn, tuple[str, ...], tuple[str, ...]], ...] = (
+        (
+            build_sih_active_census_query(
+                uf=config.uf, ano_inicio=config.ano_inicio, ano_fim=config.ano_fim
+            ),
+            validate_sih_active_census_frame,
+            ("internacoes_iniciadas",) if config.suppress_demand_microstrata else (),
+            ("id_estabelecimento_cnes", "ano_epi", "semana_epi"),
+        ),
+        (
+            build_sih_external_referral_matrix_query(
+                uf=config.uf,
+                ano_inicio=config.ano_inicio,
+                train_end_year=train_end_year,
+                min_cell_count=config.min_cell_count,
+            ),
+            validate_sih_external_referral_matrix_frame,
+            (),
+            (),
+        ),
+        (
+            build_sih_delay_triangle_query(
+                uf=config.uf,
+                ano_inicio=delay_start_year,
+                ano_fim=delay_end_year,
+                max_delay_weeks=max_delay_weeks,
+            ),
+            validate_sih_delay_triangle_frame,
+            ("incremental_count",),
+            ("ano_epi", "semana_epi"),
+        ),
+    )
     results: dict[str, IngestionResult] = {}
     for spec, validator, lgpd_counts, lgpd_strata in tasks:
         results[spec.name] = _ingest_one(

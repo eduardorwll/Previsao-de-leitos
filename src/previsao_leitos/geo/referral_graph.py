@@ -13,6 +13,7 @@ def build_causal_referral_matrix(
     cnes_to_reg: pl.DataFrame,
     mun_to_reg: pl.DataFrame,
     max_year: int,
+    exclude_self_region: bool = False,
 ) -> pl.DataFrame:
     """Constrói matriz causal `W_ref(origem -> destino)` estritamente com `ano_epi <= max_year`.
 
@@ -31,10 +32,24 @@ def build_causal_referral_matrix(
         ["id_estabelecimento_cnes", pl.col("id_regiao_saude").alias("id_regiao_destino")]
     ).unique(subset=["id_estabelecimento_cnes"])
 
-    causal_flows = flows_df.filter(pl.col("ano_epi") <= max_year)
+    if "ano_epi" in flows_df.columns:
+        causal_flows = flows_df.filter(pl.col("ano_epi") <= max_year)
+    else:
+        # Matriz externa pré-agregada no SQL (sih_w_ref_externa_treino, <= train_end_year)
+        causal_flows = flows_df
     if causal_flows.is_empty():
         raise DataContractError(
             f"Nenhum fluxo SIH disponível até max_year={max_year} para matriz causal."
+        )
+
+    vol_col = (
+        "internacoes"
+        if "internacoes" in causal_flows.columns
+        else "internacoes_urgencia_total"
+    )
+    if vol_col not in causal_flows.columns:
+        raise DataContractError(
+            "flows_df deve conter 'internacoes' ou 'internacoes_urgencia_total'."
         )
 
     agg = (
@@ -42,8 +57,11 @@ def build_causal_referral_matrix(
             mun_map, left_on="id_municipio_residencia_6d", right_on="_mun6", how="inner"
         )
         .join(cnes_map, on="id_estabelecimento_cnes", how="inner")
-        .group_by(["id_regiao_origem", "id_regiao_destino"])
-        .agg(pl.col("internacoes").sum().cast(pl.Float64).alias("_vol"))
+    )
+    if exclude_self_region:
+        agg = agg.filter(pl.col("id_regiao_origem") != pl.col("id_regiao_destino"))
+    agg = agg.group_by(["id_regiao_origem", "id_regiao_destino"]).agg(
+        pl.col(vol_col).sum().cast(pl.Float64).alias("_vol")
     )
 
     totals = agg.group_by("id_regiao_destino").agg(pl.col("_vol").sum().alias("_tot_dst"))

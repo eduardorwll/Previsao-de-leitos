@@ -50,6 +50,7 @@ from previsao_leitos.geo.referral_graph import (
     build_causal_referral_matrix,
     compute_catchment_flood_pressure,
 )
+from previsao_leitos.geo.v3_panel import build_rs_v3_panel_from_frames
 
 __all__ = [
     "ENSO_INDEX_COLUMNS",
@@ -78,6 +79,7 @@ __all__ = [
     "build_complete_daily_grid",
     "build_complete_iso_week_grid",
     "build_ex_ante_distributed_lags",
+    "build_rs_v3_panel_from_frames",
     "classify_enso_regime",
     "compute_calendar_hydro_features",
     "compute_catchment_flood_pressure",

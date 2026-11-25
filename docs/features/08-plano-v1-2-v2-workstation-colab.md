@@ -57,7 +57,7 @@ O projeto permanece 100% executável localmente na workstation Arch Linux, mas m
 ## 4. Checklist de Progresso da Frente
 
 - [x] **1.2.0** Saneamento dos 10 bugs V1.1 + `CanonicalPanelSchema` + PDF editorial + 8/8 Gates ([09-saneamento-v1-2-0.md](09-saneamento-v1-2-0.md))
-- [ ] **1.2.1** Reextração BigQuery `v3` + `rs_painel_semanal_regioes_v3.parquet`
+- [x] **1.2.1** Reextração BigQuery `v3` + `rs_painel_semanal_regioes_v3.parquet` ([10-painel-v3-bigquery.md](10-painel-v3-bigquery.md))
 - [ ] **1.2.2** Ingestão Ao Vivo Onda 2A + extras `cpu`/`rocm`/`cuda` + `F03.1` semanal real em GPU
 - [ ] **1.2.3** Ingestão Ao Vivo Onda 2B (`MERGE 0,1°` + `ANA API v2`) + ablação diária `F03.1` (`60–90` dias)
 - [ ] **1.2.4** Calibração de surtos (`BSS_pos >= +0,10`, `ECE <= 0,04`) + `AgACI` vs. `SPCI`

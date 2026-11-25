@@ -311,3 +311,39 @@ def validate_sih_external_referral_matrix_frame(df: pl.DataFrame) -> pl.DataFram
             raise DataContractError(f"Valores negativos em sih_w_ref_externa_treino.{col}.")
 
     return normalized
+
+
+def validate_sih_delay_triangle_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Valida triângulo de atraso de processamento SIH-SUS para ChainLadderNowcaster."""
+    required = (
+        "ano_epi",
+        "semana_epi",
+        "delay_weeks",
+        "incremental_count",
+        "cumulative_count",
+    )
+    _require_columns(df, required, "sih_delay_triangle")
+
+    normalized = df.select(list(required)).with_columns(
+        pl.col("ano_epi").cast(pl.Int32),
+        pl.col("semana_epi").cast(pl.Int8),
+        pl.col("delay_weeks").cast(pl.Int32),
+        pl.col("incremental_count").cast(pl.Int64),
+        pl.col("cumulative_count").cast(pl.Int64),
+    )
+
+    bad_week = normalized.filter((pl.col("semana_epi") < 1) | (pl.col("semana_epi") > 53))
+    if bad_week.height > 0:
+        raise DataContractError("sih_delay_triangle.semana_epi fora do intervalo 1..53.")
+
+    for col in ("delay_weeks", "incremental_count", "cumulative_count"):
+        if normalized.filter(pl.col(col) < 0).height > 0:
+            raise DataContractError(f"Valores negativos em sih_delay_triangle.{col}.")
+
+    bad_cum = normalized.filter(pl.col("cumulative_count") < pl.col("incremental_count"))
+    if bad_cum.height > 0:
+        raise DataContractError(
+            "sih_delay_triangle: cumulative_count menor que incremental_count."
+        )
+
+    return normalized.sort(["ano_epi", "semana_epi", "delay_weeks"])
