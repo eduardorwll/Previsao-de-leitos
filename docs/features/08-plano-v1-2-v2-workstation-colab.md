@@ -16,13 +16,13 @@ Consolidar o saneamento estrutural da V1.1 RS, planejar com rigor a transição 
 A migração para janelas diárias de `60–90` dias captura memória de solo saturado (*Antecedent Precipitation Index* de longo alcance), ondas de cheia sucessivas (como set/nov/2023 → mai/2024 no RS) e tempo real de trânsito fluvial (Taquari/Jacuí → Guaíba → Lagoa dos Patos) sem introduzir vazamento temporal.
 
 ### Fase A — Saneamento Semanal GPU/ROCm (`Task 1.2.2`, Onda 2A)
-- [ ] **Empacotamento portável (`pyproject.toml`):** remover `torch>=2.5.0` duplicado de `hydro`/`ml` e criar extras mutuamente exclusivos `cpu`, `rocm` e `cuda` (`[tool.uv] conflicts`), mantendo `.github/workflows/ci.yml` em `--extra cpu`.
-- [ ] **Correção dos 4 bloqueios de GPU/Dataset:**
+- [x] **Empacotamento portável (`pyproject.toml`):** remover `torch>=2.5.0` duplicado de `hydro`/`ml` e criar extras mutuamente exclusivos `cpu`, `rocm` e `cuda` (`[tool.uv] conflicts`), mantendo `.github/workflows/ci.yml` em `--extra cpu`.
+- [x] **Correção dos 4 bloqueios de GPU/Dataset:**
   1. Criar `resolve_accelerator(prefer_gpu: bool = True)` estritamente *lazy* (zero importação em `src/previsao_leitos/__init__.py`).
   2. Mover tensores para `module.device` em `_predict_logits` (`scripts/run_rs_f03_hydrology.py`) e em `audit_autograd_monotonicity` (`src/previsao_leitos/hydrology/oof.py`).
   3. Forçar `fp32` + `torch.amp.autocast(..., enabled=False)` na auditoria `autograd` sobre **100% do split** (eliminando o recorte `batch0`).
   4. Adicionar suporte a `enso_cols` (`x_enso`) e pré-carga opcional em VRAM no `IndexedHydroSequenceDataset` (`src/previsao_leitos/hydrology/dataset.py`).
-- [ ] **OOF Causal Real Semanal (`13` folds × `3` seeds):** substituir a regressão linear circular de `hydrology/oof.py` (`corr = 1,000000`) pelo treino real de `HydroFiLMMonotonicNet` prevendo alvo hidrológico externo (`Zenodo 10.5281/zenodo.16929471` / cota), com determinismo `deterministic="warn"` em GPU e `deterministic=True` no CI CPU.
+- [x] **OOF Causal Real Semanal (`13` folds × `3` seeds):** substituir a regressão linear circular de `hydrology/oof.py` (`corr = 1,000000`) pelo treino real de `HydroFiLMMonotonicNet` prevendo alvo hidrológico externo (`Zenodo 10.5281/zenodo.16929471` / cota), com determinismo `deterministic="warn"` em GPU e `deterministic=True` no CI CPU.
 
 ### Fase B — Transição Controlada para Grade Diária `60–90` Dias (`Task 1.2.3`, Onda 2B)
 - [ ] **Pré-requisito de dados diários reais:** ingerir `MERGE-CPTEC 0,1°` diário (`cfgrib`/`eccodeslib`, recorte RS por município-sede hospitalar — zerando `Gate G6`) e séries históricas diárias de cota/vazão `ANA HidroWeb API v2` (com fallback Zenodo `16929471` no modo offline).
@@ -58,7 +58,7 @@ O projeto permanece 100% executável localmente na workstation Arch Linux, mas m
 
 - [x] **1.2.0** Saneamento dos 10 bugs V1.1 + `CanonicalPanelSchema` + PDF editorial + 8/8 Gates ([09-saneamento-v1-2-0.md](09-saneamento-v1-2-0.md))
 - [x] **1.2.1** Reextração BigQuery `v3` + `rs_painel_semanal_regioes_v3.parquet` ([10-painel-v3-bigquery.md](10-painel-v3-bigquery.md))
-- [ ] **1.2.2** Ingestão Ao Vivo Onda 2A + extras `cpu`/`rocm`/`cuda` + `F03.1` semanal real em GPU
+- [x] **1.2.2** Ingestão Ao Vivo Onda 2A + extras `cpu`/`rocm`/`cuda` + `F03.1` semanal real em GPU ([11-onda2a-rocm-f03-oof-real.md](11-onda2a-rocm-f03-oof-real.md))
 - [ ] **1.2.3** Ingestão Ao Vivo Onda 2B (`MERGE 0,1°` + `ANA API v2`) + ablação diária `F03.1` (`60–90` dias)
 - [ ] **1.2.4** Calibração de surtos (`BSS_pos >= +0,10`, `ECE <= 0,04`) + `AgACI` vs. `SPCI`
 - [ ] **1.2.5** Otimização `_capacity_blocker` + Pareto `pymoo` NSGA-II (`SimPy` CRN 2 estágios)

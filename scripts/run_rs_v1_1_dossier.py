@@ -65,6 +65,7 @@ from previsao_leitos.geo import (
     map_rs_health_region_to_basin,
 )
 from previsao_leitos.hydrology import generate_causal_hydro_oof_predictions
+from previsao_leitos.ingestion import fetch_noaa_enso_monthly
 
 # Referência anual/mensal NOAA CPC ONI (2010-2024; 2025 excluído de qualquer leitura nesta etapa)
 _NOAA_ONI_BY_YEAR: dict[int, float] = {
@@ -276,10 +277,19 @@ def _compute_monotonic_violation_rate(
 def main() -> int:
     v3_path = Path("data/processed/rs_painel_semanal_regioes_v3.parquet")
     v2_path = Path("data/processed/rs_painel_semanal_regioes_v2.parquet")
+    oof_neural_path = Path("data/processed/rs_f03_hydro_oof_v3.parquet")
     panel_path = v3_path if v3_path.exists() else v2_path
     is_v3 = panel_path == v3_path
-    run_id = "rs_v1_2_1_panel_v3_2024" if is_v3 else "rs_v1_2_0_sanitized_2024"
-    version_tag = "V1.2.1" if is_v3 else "V1.2.0"
+    has_real_oof = is_v3 and oof_neural_path.exists()
+    if has_real_oof:
+        run_id = "rs_v1_2_2_f03_real_2024"
+        version_tag = "V1.2.2"
+    elif is_v3:
+        run_id = "rs_v1_2_1_panel_v3_2024"
+        version_tag = "V1.2.1"
+    else:
+        run_id = "rs_v1_2_0_sanitized_2024"
+        version_tag = "V1.2.0"
     raw_dir = Path("data/raw")
     if not panel_path.exists():
         print(f"[ERRO] Painel não encontrado: {panel_path}")
@@ -290,7 +300,7 @@ def main() -> int:
     raw_panel = pl.read_parquet(panel_path).filter(pl.col("ano_epi") < policy.holdout_year)
     rows_before_join = raw_panel.height
 
-    # 1. Convolução multi-salto (F02.2) + teleconexões ENSO causais (F02.3) + CNES mensal
+    # 1. Convolução multi-salto (F02.2) + teleconexões ENSO causais (NOAA real ou referência)
     topo = BasinTopology.from_weighted_edges(RS_BASIN_WEIGHTED_EDGES)
     panel = raw_panel
     if "bacia_id" not in panel.columns:
@@ -307,9 +317,16 @@ def main() -> int:
             output_col="chuva_montante_multihop",
             multi_hop=True,
         )
-    enso_wk = build_causal_enso_weekly_features(
-        _build_reference_enso_monthly(), lags=(4, 12)
-    ).select(["ano_epi", "semana_epi", "el_nino_intensity", "enso_regime", "oni_c_lag4"])
+    noaa_cache_file = raw_dir / "wave2a" / "noaa_cpc_oni.ascii.txt"
+    if noaa_cache_file.exists():
+        enso_monthly, _ = fetch_noaa_enso_monthly(
+            cache_dir=raw_dir / "wave2a", include_mei_v2=True, max_year=policy.dev_audit_year
+        )
+    else:
+        enso_monthly = _build_reference_enso_monthly()
+    enso_wk = build_causal_enso_weekly_features(enso_monthly, lags=(4, 12)).select(
+        ["ano_epi", "semana_epi", "el_nino_intensity", "enso_regime", "oni_c_lag4"]
+    )
     panel = panel.join(enso_wk, on=["ano_epi", "semana_epi"], how="left").with_columns(
         pl.col("el_nino_intensity").fill_null(0.0),
         pl.col("oni_c_lag4").fill_null(0.0),
@@ -323,24 +340,39 @@ def main() -> int:
         panel = _attach_causal_monthly_cnes(panel, cnes_monthly)
     rows_after_join = panel.height
 
-    # 2. Alvo físico de inundação (percentil 95 de chuva multi-salto no treino <= 2022) + OOF F03.1
-    rain_p95_tr = float(
-        panel.filter(pl.col("ano_epi") <= 2022)["chuva_montante_multihop"].quantile(0.95) or 100.0
-    )
-    panel = panel.with_columns(
-        (pl.col("chuva_montante_multihop") >= rain_p95_tr)
-        .cast(pl.Float64)
-        .alias("_y_flood_event"),
-        (pl.col("chuva_montante_multihop") / max(rain_p95_tr, 1.0)).alias("_y_flood_sev"),
-    )
-    panel = generate_causal_hydro_oof_predictions(
-        panel,
-        feature_cols=("chuva_montante_multihop", "api_max_sem", "oni_c_lag4", "el_nino_intensity"),
-        event_col="_y_flood_event",
-        severity_col="_y_flood_sev",
-        train_end_year=2022,
-        cal_year=2023,
-    )
+    # 2. OOF hidrológico F03.1: prioriza HydroFiLM-ENSO real (Task 1.2.2) quando disponível
+    if has_real_oof:
+        oof_df = pl.read_parquet(oof_neural_path).filter(pl.col("ano_epi") < policy.holdout_year)
+        panel = panel.join(
+            oof_df, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
+        ).with_columns(
+            pl.col("prob_enchente_f03_oof").fill_null(0.05),
+            pl.col("severidade_hidro_f03_oof").fill_null(0.0),
+        )
+    else:
+        rain_p95_tr = float(
+            panel.filter(pl.col("ano_epi") <= 2022)["chuva_montante_multihop"].quantile(0.95)
+            or 100.0
+        )
+        panel = panel.with_columns(
+            (pl.col("chuva_montante_multihop") >= rain_p95_tr)
+            .cast(pl.Float64)
+            .alias("_y_flood_event"),
+            (pl.col("chuva_montante_multihop") / max(rain_p95_tr, 1.0)).alias("_y_flood_sev"),
+        )
+        panel = generate_causal_hydro_oof_predictions(
+            panel,
+            feature_cols=(
+                "chuva_montante_multihop",
+                "api_max_sem",
+                "oni_c_lag4",
+                "el_nino_intensity",
+            ),
+            event_col="_y_flood_event",
+            severity_col="_y_flood_sev",
+            train_end_year=2022,
+            cal_year=2023,
+        )
 
     # Porte regional causal (<= 2022) + capacidade semanal real CNES mensal (fallback causal)
     porte_map = (

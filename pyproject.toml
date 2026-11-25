@@ -34,8 +34,17 @@ stats = [
     "statsmodels>=0.14.4",
     "matplotlib>=3.10.0",
 ]
-hydro = [
+cpu = [
     "torch>=2.5.0",
+]
+rocm = [
+    "torch>=2.5.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "triton-rocm; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+cuda = [
+    "torch>=2.5.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+hydro = [
     "lightning>=2.5.0",
 ]
 ml = [
@@ -45,7 +54,6 @@ ml = [
     "statsmodels>=0.14.4",
     "shap>=0.46.0",
     "matplotlib>=3.10.0",
-    "torch>=2.5.0",
     "lightning>=2.5.0",
     "torchmetrics>=1.6.0",
 ]
@@ -124,13 +132,39 @@ module = [
 ]
 ignore_missing_imports = true
 
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "rocm" },
+        { extra = "cuda" },
+    ],
+]
+
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.2"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cuda", extra = "cuda", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+]
+triton-rocm = [
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
