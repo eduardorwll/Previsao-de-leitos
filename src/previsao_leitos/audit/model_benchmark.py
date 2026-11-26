@@ -52,6 +52,7 @@ class BenchmarkResult:
     metrics: pl.DataFrame
     comparison: pl.DataFrame
     decisions: pl.DataFrame
+    eligibility: pl.DataFrame
     candidates: tuple[str, ...] = ()
     notes: tuple[str, ...] = field(default_factory=tuple)
 
@@ -258,7 +259,15 @@ def run_benchmark(
             model = _fit_one(spec, splits)
             fit_seconds = time.perf_counter() - t0
             t1 = time.perf_counter()
-            preds = model.predict_quantiles(splits.eval_df)
+            if spec.online and hasattr(model, "predict_quantiles_online"):
+                preds = model.predict_quantiles_online(
+                    splits.eval_df,
+                    target_col="target_y",
+                    year_col="target_ano_epi",
+                    week_col="target_semana_epi",
+                )
+            else:
+                preds = model.predict_quantiles(splits.eval_df)
             predict_seconds = time.perf_counter() - t1
             if preds.height != splits.eval_df.height:
                 raise DataContractError(
@@ -372,8 +381,51 @@ def run_benchmark(
         metrics=metrics_df,
         comparison=comparison,
         decisions=decisions,
+        eligibility=summarize_eligibility(metrics_df),
         candidates=tuple(spec.name for spec in specs),
         notes=tuple(notes),
+    )
+
+
+def summarize_eligibility(
+    metrics_df: pl.DataFrame,
+    *,
+    min_coverage: float = 0.80,
+    max_violations: int = 0,
+) -> pl.DataFrame:
+    """Modelos que satisfazem os pisos duros de cobertura e monotonicidade.
+
+    A catraca promove apenas com ganho de MASE; esta tabela responde a outra
+    pergunta: *quem é confiável para uso*, independentemente de ganhar a corrida
+    de acurácia.
+    """
+    ok = metrics_df.filter(pl.col("status") == "ok")
+    if ok.height == 0:
+        return pl.DataFrame(
+            schema={
+                "candidate": pl.String,
+                "mase_vs_pers": pl.Float64,
+                "cobertura_p10_p90": pl.Float64,
+                "monotonic_violations": pl.Int64,
+                "eligible": pl.Boolean,
+            }
+        )
+    return (
+        ok.select(
+            [
+                "candidate",
+                "mase_vs_pers",
+                "cobertura_p10_p90",
+                "monotonic_violations",
+            ]
+        )
+        .with_columns(
+            (
+                (pl.col("cobertura_p10_p90") >= min_coverage)
+                & (pl.col("monotonic_violations") <= max_violations)
+            ).alias("eligible")
+        )
+        .sort(["eligible", "mase_vs_pers"], descending=[True, False])
     )
 
 

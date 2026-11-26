@@ -177,3 +177,37 @@ def test_report_command_renders_pdf(tmp_path: Path) -> None:
     )
     assert "Not for patient care or live clinical use" in html_text
     assert "```" not in html_text
+
+
+def test_parallel_jobs_merge_targets(tmp_path: Path) -> None:
+    panel = _write_panel(tmp_path / "panel.parquet")
+    out = tmp_path / "runs"
+    code = cli_main(
+        [
+            "benchmark",
+            "--panel-path",
+            str(panel),
+            "--output-dir",
+            str(out),
+            "--run-id",
+            "par",
+            "--target",
+            "uti_adulto,clinico",
+            "--models",
+            "persistencia",
+            "--jobs",
+            "2",
+            "--n-boot",
+            "10",
+            "--no-report",
+        ]
+    )
+    assert code == 0
+    run_dir = out / "par"
+    metrics = pl.read_csv(run_dir / "benchmark.csv")
+    assert set(metrics["target"].to_list()) == {"uti_adulto", "clinico"}
+    assert (run_dir / "predictions.parquet").exists()
+    assert not (run_dir / "_parts").exists()
+    manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["parallel"] is True
+    assert manifest["jobs"] == 2

@@ -317,6 +317,10 @@ def render_report(
     )
     decisions_path = run_dir / "decisions.csv"
     decisions = pl.read_csv(decisions_path) if decisions_path.exists() else pl.DataFrame()
+    eligibility_path = run_dir / "eligibility.csv"
+    eligibility = (
+        pl.read_csv(eligibility_path) if eligibility_path.exists() else pl.DataFrame()
+    )
 
     ok = metrics.filter(pl.col("status") == "ok")
     n_ok = ok.height
@@ -337,6 +341,38 @@ def render_report(
                 ["candidate", "champion", "decision", "summary"],
             )
         )
+
+    eligibility_block = ""
+    if eligibility.height and "eligible" in eligibility.columns:
+        blocks: list[str] = [
+            "<h2>5. Elegibilidade para uso</h2>",
+            "<p>Um modelo é <strong>elegível</strong> quando atinge cobertura P10-P90 "
+            "&ge; 80% e zero violações monotônicas. A catraca promove apenas com ganho de "
+            "MASE; esta tabela responde outra pergunta: quem é confiável para uso.</p>",
+        ]
+        for target, label in target_labels.items():
+            subset = eligibility.filter(pl.col("target") == target)
+            if subset.height == 0:
+                continue
+            n_eligible = int(subset.filter(pl.col("eligible")).height)
+            header = (
+                f"<h3>{html.escape(label)}</h3>"
+                f"<p>{n_eligible} de {subset.height} modelos elegíveis.</p>"
+            )
+            blocks.append(
+                header
+                + _table(
+                    subset,
+                    [
+                        "candidate",
+                        "mase_vs_pers",
+                        "cobertura_p10_p90",
+                        "monotonic_violations",
+                        "eligible",
+                    ],
+                )
+            )
+        eligibility_block = "".join(blocks)
 
     manifest_block = ""
     if manifest:
@@ -380,7 +416,9 @@ em pacientes-dia. Comparações de MASE são válidas dentro do alvo, nunca entr
 
 {decisions_block}
 
-<h2>5. Calibração, monotonicidade e riscos</h2>
+{eligibility_block}
+
+<h2>6. Calibração, monotonicidade e riscos</h2>
 <div class="note">
 A coluna <strong>monotonic_violations</strong> conta quedas de P50 quando o choque
 hidrológico ex-ante aumenta (ADR-0001); o gate é zero. Cobertura fora da faixa
@@ -389,7 +427,7 @@ hidrológico ex-ante aumenta (ADR-0001); o gate é zero. Cobertura fora da faixa
 <p>Baselines ancorados em observação não usam as covariáveis de choque, portanto
 não exercem o teste de monotonicidade — isso é registrado, não escondido.</p>
 
-<h2>6. Limitações e fronteira clínica</h2>
+<h2>7. Limitações e fronteira clínica</h2>
 <ul>
 <li>{_DISCLAIMER}; uso exclusivo em pesquisa e planejamento agregado.</li>
 <li>Resultados referem-se ao ano de desenvolvimento/auditoria ({eval_year}); a

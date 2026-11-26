@@ -214,3 +214,43 @@ def test_benchmark_marks_unavailable_candidate_instead_of_dropping_it(
     )
     status = result.metrics.filter(pl.col("candidate") == "hierarchical_bayes")["status"]
     assert status.to_list() == ["unavailable"]
+
+
+def test_eligibility_requires_coverage_and_monotonicity() -> None:
+    from previsao_leitos.audit.model_benchmark import summarize_eligibility
+
+    metrics = pl.DataFrame(
+        {
+            "candidate": ["a", "b", "c"],
+            "status": ["ok", "ok", "ok"],
+            "mase_vs_pers": [0.99, 0.95, 1.10],
+            "cobertura_p10_p90": [0.85, 0.70, 0.90],
+            "monotonic_violations": [0, 0, 3],
+        }
+    )
+    table = summarize_eligibility(metrics)
+    flags = dict(zip(table["candidate"].to_list(), table["eligible"].to_list(), strict=True))
+    assert flags == {"a": True, "b": False, "c": False}
+    # Elegíveis primeiro, depois por MASE.
+    assert table["candidate"].to_list()[0] == "a"
+
+
+def test_online_candidate_keeps_point_and_widens_intervals() -> None:
+    panel = _synthetic_panel()
+    splits = make_modeling_splits(panel, target="uti_adulto", eval_year=2024)
+    result = run_benchmark(
+        splits,
+        run_id="online",
+        candidates="gbdt_v1,gbdt_agaci",
+        n_boot=10,
+        seed=4,
+    )
+    preds = result.predictions.sort(["model", "entity", "target_week"])
+    base = preds.filter(pl.col("model") == "gbdt_v1")
+    online = preds.filter(pl.col("model") == "gbdt_agaci")
+    assert base.height == online.height
+    # P50 não é alterado pela calibração online; a meia-largura sim.
+    assert np.allclose(base["pred_p50"].to_numpy(), online["pred_p50"].to_numpy(), atol=1e-9)
+    width_base = (base["pred_p90"] - base["pred_p10"]).to_numpy()
+    width_online = (online["pred_p90"] - online["pred_p10"]).to_numpy()
+    assert not np.allclose(width_base, width_online)

@@ -13,6 +13,7 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,12 +51,13 @@ class HierarchicalBayesConfig:
     target_accept: float = 0.95
     random_seed: int = 42
     n_harmonics: int = 2
-    nuts_sampler: str = "nutpie"
     mp_ctx: str = "spawn"
     train_end_year: int = 2022
     holdout_year: int = 2025
     hierarchical_shock_slope: bool = False
     include_trend: bool = False
+    nuts_sampler: str = "auto"  # auto | nutpie | numpyro
+    device: str = "auto"  # auto | cpu | gpu
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,67 @@ class HierarchicalBayesDiagnostics:
             and np.isfinite(self.loo_elpd)
             and self.pareto_k_max < 0.7
         )
+
+
+def _jax_platform_for_device(device: str) -> str:
+    """Traduz `device` para a plataforma JAX, usando o acelerador já resolvido no projeto."""
+    if device == "cpu":
+        return "cpu"
+    from previsao_leitos.hydrology.device import resolve_accelerator
+
+    spec = resolve_accelerator(prefer_gpu=True, requested_device="auto")
+    if spec.accelerator != "gpu":
+        raise DataContractError(
+            "GPU solicitada, mas nenhum acelerador foi detectado. "
+            "Use `--device cpu` ou valide o ROCm/CUDA (`uv run python -c \"import torch\"`)."
+        )
+    if spec.backend == "rocm":
+        return "rocm"
+    if spec.backend == "cuda":
+        return "cuda"
+    raise DataContractError(f"Backend de GPU não suportado pelo JAX: {spec.backend}")
+
+
+def resolve_sampling_backend(config: HierarchicalBayesConfig) -> tuple[str, str]:
+    """Escolhe o amostrador NUTS e valida a stack (fail-closed, sem fallback silencioso).
+
+    Retorna `(sampler, detalhe)`. `auto` mantém o `nutpie` (CPU, validado no projeto)
+    e só migra para `numpyro`/JAX quando a GPU é pedida explicitamente.
+    """
+    import importlib.util
+    import sys
+
+    sampler = config.nuts_sampler
+    device = config.device
+    if sampler not in ("auto", "nutpie", "numpyro"):
+        raise DataContractError(f"nuts_sampler desconhecido: {sampler}")
+    if device not in ("auto", "cpu", "gpu"):
+        raise DataContractError(f"device desconhecido: {device}")
+
+    has_numpyro = importlib.util.find_spec("numpyro") is not None
+    has_jax = importlib.util.find_spec("jax") is not None
+
+    if sampler == "nutpie" and device == "gpu":
+        raise DataContractError(
+            "nutpie é CPU-only; para GPU use `--sampler numpyro --device gpu` "
+            "(requer `numpyro` e `jax[rocm|cuda]`)."
+        )
+    if sampler == "numpyro" or (sampler == "auto" and device == "gpu"):
+        if not (has_numpyro and has_jax):
+            raise DataContractError(
+                "Aceleração GPU exige `numpyro` e `jax` com plugin ROCm/CUDA. "
+                "Instale opcionalmente: `uv pip install numpyro jax` "
+                "(ou o wheel `jax-rocm*` correspondente) e repita o comando."
+            )
+        platform = _jax_platform_for_device(device if device != "auto" else "gpu")
+        if "jax" in sys.modules and os.environ.get("JAX_PLATFORMS") != platform:
+            raise DataContractError(
+                "JAX já foi importado com outra plataforma; defina "
+                f"`JAX_PLATFORMS={platform}` antes de iniciar o processo."
+            )
+        os.environ["JAX_PLATFORMS"] = platform
+        return "numpyro", f"numpyro/JAX em {platform}"
+    return "nutpie", "nutpie (CPU)"
 
 
 def validate_hierarchical_panel(
@@ -272,19 +335,22 @@ def fit_hierarchical_bayes(
     import pymc as pm  # lazy
 
     cfg = config or HierarchicalBayesConfig()
+    sampler, _detail = resolve_sampling_backend(cfg)
     model = build_hierarchical_model(panel, config=cfg)
+    sample_kwargs: dict[str, Any] = {
+        "draws": cfg.n_draws,
+        "tune": cfg.n_tune,
+        "chains": cfg.n_chains,
+        "cores": cfg.n_chains,
+        "target_accept": cfg.target_accept,
+        "nuts_sampler": sampler,
+        "random_seed": cfg.random_seed,
+        "progressbar": False,
+    }
+    if sampler in ("nutpie", "pymc"):
+        sample_kwargs["mp_ctx"] = cfg.mp_ctx
     with model:
-        idata = pm.sample(
-            draws=cfg.n_draws,
-            tune=cfg.n_tune,
-            chains=cfg.n_chains,
-            cores=cfg.n_chains,
-            target_accept=cfg.target_accept,
-            nuts_sampler=cfg.nuts_sampler,
-            random_seed=cfg.random_seed,
-            mp_ctx=cfg.mp_ctx,
-            progressbar=False,
-        )
+        idata = pm.sample(**sample_kwargs)
     # `nutpie` não persiste o grupo de log-verossimilhança; PSIS-LOO exige calculá-lo.
     idata = pm.compute_log_likelihood(
         idata, model=model, extend_inferencedata=True, progressbar=False

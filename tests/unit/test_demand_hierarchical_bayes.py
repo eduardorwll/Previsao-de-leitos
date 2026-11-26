@@ -225,3 +225,27 @@ def test_build_model_requires_fitted_columns() -> None:
     panel = _panel().drop("prob_enchente_f03_oof")
     with pytest.raises(DataContractError):
         build_hierarchical_model(panel)
+
+
+def test_sampling_backend_resolution_is_fail_closed() -> None:
+    from previsao_leitos.demand.hierarchical_bayes import (
+        HierarchicalBayesConfig,
+        resolve_sampling_backend,
+    )
+
+    sampler, detail = resolve_sampling_backend(
+        HierarchicalBayesConfig(nuts_sampler="nutpie", device="cpu")
+    )
+    assert sampler == "nutpie"
+    assert "CPU" in detail
+
+    with pytest.raises(DataContractError):
+        resolve_sampling_backend(
+            HierarchicalBayesConfig(nuts_sampler="nutpie", device="gpu")
+        )
+    with pytest.raises(DataContractError):
+        resolve_sampling_backend(
+            HierarchicalBayesConfig(nuts_sampler="numpyro", device="gpu")
+        )
+    with pytest.raises(DataContractError):
+        resolve_sampling_backend(HierarchicalBayesConfig(nuts_sampler="invalido"))

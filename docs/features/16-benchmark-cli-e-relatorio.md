@@ -58,8 +58,11 @@ Artefatos por run:
 ## 4. Roster avaliado
 
 Baselines obrigatórios: persistência (`y_origin`) e sazonal-ingênuo (`lag 52`).
-Modelos: `ridge_pooled`, `negbin_hurdle`, `gbdt_v1`, `gbdt_conformal`, `f041_core`,
-`f041_mondrian`, `f041_agaci`, `f041_spci`, `hierarchical_bayes`.
+Modelos: `ridge_pooled`, `negbin_hurdle`, `gbdt_v1`, `gbdt_conformal`, `gbdt_agaci`,
+`gbdt_spci`, `f041_core`, `f041_mondrian`, `f041_agaci`, `f041_spci`, `hierarchical_bayes`
+(13 candidatos no total). Os dois `gbdt_*` adicionais usam **calibração conformal online**
+(`predict_quantiles_online`, atraso causal de 2 semanas), que recalibra durante o ano de
+avaliação em vez de congelar os quantis de 2023.
 
 Campeão registrado: **`gbdt_conformal`** (V1 auditado). O benchmark revelou que o F04.1
 não supera o V1 neste split — o registro foi corrigido para refletir a evidência, e não o contrário.
@@ -68,15 +71,19 @@ não supera o V1 neste split — o registro foi corrigido para refletir a evidê
 
 ## 5. Resultados (run `rs_v1_3_benchmark_2024`)
 
-> Fonte: `reports/runs/rs_v1_3_benchmark_2024/benchmark.csv`. `44/44` candidatos concluídos em `1.141 s` de CPU.
+> Fonte: `reports/runs/rs_v1_3_benchmark_2024/benchmark.csv`. `52/52` candidatos (13 modelos × 4 alvos) concluídos em **`434 s`** com 4 processos paralelos.
 
-| Alvo | Melhor MASE | Modelo | MASE vs. persistência | Cobertura P10–P90 | Erro pontual |
+| Alvo | Melhor MASE | Modelo | MASE | Cobertura do melhor | Erro pontual |
 | :--- | :---: | :--- | :---: | :---: | :---: |
-| UTI adulto | 0,9843 | `gbdt_conformal` / `gbdt_v1` | `-1,6%` vs. persistência | `70,0%` | `3,51` leitos/dia |
-| UTI total | 0,9716 | `gbdt_conformal` / `gbdt_v1` | `-2,8%` | `68,3%` | `4,33` leitos/dia |
-| Clínico | 0,9831 | `gbdt_conformal` / `gbdt_v1` | `-1,7%` | `66,5%` | `127,3` pacientes-dia |
+| UTI adulto | 0,9843 | `gbdt_v1` | `-1,6%` vs. persistência | `70,0%` | `3,51` leitos/dia |
+| UTI total | 0,9714 | `gbdt_spci` | `-2,9%` | `70,9%` | `4,33` leitos/dia |
+| Clínico | 0,9831 | `gbdt_v1` | `-1,7%` | `66,5%` | `127,3` pacientes-dia |
 | Respiratório | 0,8837 | `ridge_pooled` | `-11,6%` | `69,6%` | `9,71` pacientes-dia |
-| Respiratório (calibrado) | 0,8873 | `gbdt_conformal` | `-11,3%` | **`79,0%`** | `9,75` pacientes-dia |
+| **Melhor calibração** | — | `gbdt_agaci` (online) | `0,983–0,887` | **`78,1–80,4%`** | mesma do GBDT |
+
+> Nenhum modelo atinge `>= 80%` em todos os quatro alvos simultaneamente. Os elegíveis por
+> alvo são: UTI adulto e total → `hierarchical_bayes` (cobertura `~93%`, mas `MASE > 2`);
+> clínico → `negbin_hurdle`; respiratório → `gbdt_agaci`, `f041_mondrian` e `f041_agaci`.
 
 ### 5.1 Achados relevantes
 
@@ -93,13 +100,66 @@ não supera o V1 neste split — o registro foi corrigido para refletir a evidê
   (`MASE 2,23`) e custo de `~4 min/alvo`; é rejeitado por regressão em métrica secundária.
 - **Baselines são competitivos em alvos difíceis:** `ridge_pooled` lidera respiratório
   (`MASE 0,884`), o que limita o ganho atribuível à modelagem não linear nesse alvo.
-- **Monotonicidade:** `0` violações em todos os `44` pares modelo × alvo, incluindo o
+- **Monotonicidade:** `0` violações em todos os pares modelo × alvo, incluindo o
   bayesiano após a correção de prior (`Normal → HalfNormal`).
+
+### 5.2 Recalibração online fecha o gap de cobertura
+
+O calibrador conformal congelado em 2023 não cobre 2024. A resposta causal é recalibrar
+**durante** o ano, revelando resíduos apenas após `lag = 2` semanas:
+
+| Modelo (UTI adulto) | MASE | Cobertura P10–P90 | Pinball P95 |
+| :--- | ---: | ---: | ---: |
+| `gbdt_v1` (sem calibração) | 0,9843 | 70,0% | 4,740 |
+| `gbdt_conformal` (2023 congelado) | 0,9843 | 70,0% | 4,740 |
+| **`gbdt_agaci` (online)** | **0,9843** | **79,7%** | **4,413** |
+| `gbdt_spci` (online) | 0,9843 | 72,6% | 4,339 |
+
+Em respiratório o `gbdt_agaci` cruza o piso: `80,4%` de cobertura (era `76,4%`). Em UTI
+total fica em `79,5%` e em clínico `78,1%` — a lacuna remanescente é de frações de ponto
+percentual e deve ser fechada no `Marco M1` com janela de calibração mais curta.
+
+O P50 é idêntico por construção (a calibração só move P10/P90/P95), portanto o ganho de
+confiabilidade é gratuito em acurácia. A tabela `eligibility.csv` marca quem atinge
+cobertura `>= 80%` com zero violações monotônicas.
 
 
 ---
 
-## 6. Limitações
+## 6. Desempenho: paralelismo por alvo e GPU opcional
+
+O gargalo do run completo é o MCMC bayesiano (uma amostragem por alvo). A execução é
+paralelizada **por alvo em processos separados** (`python -m previsao_leitos`), não por
+threads: o NUTS e o `numpyro` liberam o GIL em C, mas a orquestração e os modelos
+`scikit-learn` não, então `threads` não escalariam.
+
+| Configuração | Processos | Uso de núcleos | Observação |
+| :--- | :--- | :--- | :--- |
+| `--jobs 1` | 1 | 2 (cadeias NUTS) | referência sequencial |
+| `--jobs 4` (padrão p/ 4 alvos) | 4 | 8 | um alvo por processo, 2 cadeias cada; medido: `1.141 s → 434 s` |
+| `--jobs 0` | automático (`núcleos/2`) | até `núcleos` | evita oversubscription |
+
+Cada processo filho recebe `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1` e
+`MKL_NUM_THREADS=1` para não roubar threads do NUTS. O `run_manifest.json` registra
+`jobs`, `parallel`, `sampler`, `device` e o acelerador detectado.
+
+**GPU.** Os modelos tabulares (GBDT, Ridge, dois estágios, conformais) não têm caminho GPU
+útil aqui; a GPU acelera apenas o amostrador bayesiano:
+
+```bash
+uv pip install numpyro jax        # + wheel ROCm/CUDA correspondente ao seu driver
+uv run --no-sync previsao-leitos run --target all --models all \
+  --sampler numpyro --device gpu
+```
+
+O caminho é *fail-closed*: `--device gpu` com `nutpie` (CPU-only) ou sem `numpyro`/`jax`
+falha com mensagem explícita e instrução de instalação. A plataforma JAX é escolhida pelo
+acelerador já detectado no projeto (`resolve_accelerator`: ROCm → `JAX_PLATFORMS=rocm`,
+CUDA → `cuda`), e nunca há fallback silencioso para CPU.
+
+---
+
+## 7. Limitações
 
 1. `2024` é ano de **desenvolvimento e auditoria**, não *out-of-time*; a afirmação de
    generalização pertence ao `Marco M2`.
@@ -112,7 +172,7 @@ não supera o V1 neste split — o registro foi corrigido para refletir a evidê
 
 ---
 
-## 7. Arquivos
+## 8. Arquivos
 
 - `src/previsao_leitos/demand/registry.py`, `baselines.py`, `modeling.py`, `hierarchical_forecaster.py`
 - `src/previsao_leitos/audit/model_benchmark.py`, `comparison_plots.py`, `benchmark_report.py`

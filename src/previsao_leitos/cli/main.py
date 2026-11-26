@@ -341,6 +341,17 @@ def _cmd_verify_rs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _detect_accelerator() -> str:
+    """Nome do acelerador disponível (informativo; não altera o cálculo tabular)."""
+    try:
+        from previsao_leitos.hydrology.device import resolve_accelerator
+
+        spec = resolve_accelerator(prefer_gpu=True, requested_device="auto")
+        return f"{spec.backend}:{spec.device_name}"
+    except Exception:
+        return "indisponível"
+
+
 def _git_sha() -> str:
     """SHA curto do commit atual, ou `unknown` fora de um repositório Git."""
     import subprocess
@@ -355,8 +366,133 @@ def _git_sha() -> str:
         return "unknown"
 
 
+_PARALLEL_ARTIFACTS: tuple[str, ...] = (
+    "benchmark.csv",
+    "predictions.parquet",
+    "comparison.csv",
+    "decisions.csv",
+    "eligibility.csv",
+)
+
+
+def _default_jobs(n_targets: int) -> int:
+    """Um processo por alvo, sem estourar os núcleos (cada NUTS usa 2 cadeias)."""
+    import os
+
+    cpus = os.cpu_count() or 1
+    return max(1, min(n_targets, max(1, cpus // 2)))
+
+
+def _merge_part_runs(parts: list[Path], run_dir: Path) -> None:
+    """Consolida os artefatos dos processos por alvo no run final."""
+    for name in _PARALLEL_ARTIFACTS:
+        frames = []
+        for part in parts:
+            path = part / name
+            if not path.exists():
+                continue
+            frames.append(pl.read_parquet(path) if name.endswith(".parquet") else pl.read_csv(path))
+        if not frames:
+            continue
+        combined = pl.concat(frames, how="diagonal_relaxed")
+        destination = run_dir / name
+        if name.endswith(".parquet"):
+            combined.write_parquet(destination)
+        else:
+            combined.write_csv(destination)
+
+
+def _run_targets_parallel(
+    *,
+    targets: list[object],
+    args: argparse.Namespace,
+    run_dir: Path,
+    jobs: int,
+) -> list[Path] | None:
+    """Executa cada alvo em um processo próprio (`python -m previsao_leitos`)."""
+    import os
+    import subprocess
+    import time
+
+    parts_root = run_dir / "_parts"
+    parts_root.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    for var in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        env[var] = "1"
+
+    pending = list(targets)
+    running: dict[str, tuple[object, subprocess.Popen[str], Path]] = {}
+    finished: list[Path] = []
+    failures: list[str] = []
+
+    while pending or running:
+        while pending and len(running) < jobs:
+            spec = pending.pop(0)
+            key = str(getattr(spec, "key", spec))
+            part_run_id = f"part_{key}"
+            command = [
+                sys.executable,
+                "-m",
+                "previsao_leitos",
+                "benchmark",
+                "--target",
+                key,
+                "--models",
+                args.models,
+                "--panel-path",
+                args.panel_path,
+                "--output-dir",
+                str(parts_root),
+                "--run-id",
+                part_run_id,
+                "--eval-year",
+                str(args.eval_year),
+                "--seed",
+                str(args.seed),
+                "--n-boot",
+                str(args.n_boot),
+                "--no-report",
+                "--no-mirror-downloads",
+            ]
+            if args.allow_holdout:
+                command.append("--allow-holdout")
+            process = subprocess.Popen(  # noqa: S603 - comando montado internamente
+                command,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            running[key] = (spec, process, parts_root / part_run_id)
+        for key in list(running):
+            _spec, process, part_dir = running[key]
+            if process.poll() is None:
+                continue
+            output = process.stdout.read() if process.stdout else ""
+            if process.returncode != 0:
+                failures.append(f"{key}: {output.strip()[-400:]}")
+            else:
+                finished.append(part_dir)
+            del running[key]
+        if running:
+            time.sleep(0.5)
+
+    if failures:
+        for failure in failures:
+            print(f"[erro] alvo falhou -> {failure}")
+        return None
+    return finished
+
+
 def _cmd_benchmark(args: argparse.Namespace) -> int:
     import json
+    import os
+    import shutil
     import time
     from datetime import UTC, datetime
 
@@ -369,6 +505,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     from previsao_leitos.audit.model_benchmark import run_benchmark
     from previsao_leitos.demand.modeling import make_modeling_splits, resolve_targets
     from previsao_leitos.demand.registry import resolve_selection
+    from previsao_leitos.domain import DataContractError
 
     panel_path = Path(args.panel_path)
     if not panel_path.exists():
@@ -377,6 +514,9 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
             "Rode `python scripts/build_rs_modeling_panel.py`."
         )
         return 2
+
+    os.environ["PREVISAO_BAYES_SAMPLER"] = args.sampler
+    os.environ["PREVISAO_BAYES_DEVICE"] = args.device
 
     request_start = time.perf_counter()
     panel = pl.read_parquet(panel_path)
@@ -391,60 +531,84 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     if isinstance(target_selection, str) and "," in target_selection:
         target_selection = tuple(p.strip() for p in target_selection.split(",") if p.strip())
     targets = resolve_targets(target_selection)
-    metrics_frames: list[pl.DataFrame] = []
-    prediction_frames: list[pl.DataFrame] = []
-    comparison_frames: list[pl.DataFrame] = []
-    decision_frames: list[pl.DataFrame] = []
+    jobs = args.jobs if args.jobs and args.jobs > 0 else _default_jobs(len(targets))
+    jobs = max(1, min(jobs, len(targets)))
+    parallel = jobs > 1 and len(targets) > 1
+
     notes: list[str] = []
-
-    from previsao_leitos.domain import DataContractError
-
-    for spec in targets:
-        try:
-            splits = make_modeling_splits(
-                panel,
-                target=spec.key,
-                eval_year=args.eval_year,
-                allow_holdout=args.allow_holdout,
+    if parallel:
+        print(
+            f"[benchmark] execução paralela: {len(targets)} alvos em até {jobs} processos "
+            "(2 cadeias NUTS por processo)"
+        )
+        finished = _run_targets_parallel(
+            targets=list(targets), args=args, run_dir=run_dir, jobs=jobs
+        )
+        if finished is None:
+            return 4
+        _merge_part_runs(finished, run_dir)
+        shutil.rmtree(run_dir / "_parts", ignore_errors=True)
+        notes.append(f"execução paralela com {jobs} processos (um por alvo)")
+    else:
+        metrics_frames: list[pl.DataFrame] = []
+        prediction_frames: list[pl.DataFrame] = []
+        comparison_frames: list[pl.DataFrame] = []
+        decision_frames: list[pl.DataFrame] = []
+        eligibility_frames: list[pl.DataFrame] = []
+        for spec in targets:
+            try:
+                splits = make_modeling_splits(
+                    panel,
+                    target=spec.key,
+                    eval_year=args.eval_year,
+                    allow_holdout=args.allow_holdout,
+                )
+            except DataContractError as exc:
+                print(f"[erro] {spec.key}: {exc}")
+                return 3
+            result = run_benchmark(
+                splits,
+                run_id=f"{run_id}:{spec.key}",
+                candidates=[s.name for s in specs],
+                n_boot=args.n_boot,
+                seed=args.seed,
             )
-        except DataContractError as exc:
-            print(f"[erro] {spec.key}: {exc}")
-            return 3
-        result = run_benchmark(
-            splits,
-            run_id=f"{run_id}:{spec.key}",
-            candidates=[s.name for s in specs],
-            n_boot=args.n_boot,
-            seed=args.seed,
-        )
-        metrics_frames.append(result.metrics.with_columns(pl.lit(spec.key).alias("target")))
-        prediction_frames.append(
-            result.predictions.with_columns(pl.lit(spec.key).alias("target"))
-        )
-        if result.comparison.height:
-            comparison_frames.append(
-                result.comparison.with_columns(pl.lit(spec.key).alias("target"))
+            metrics_frames.append(result.metrics.with_columns(pl.lit(spec.key).alias("target")))
+            prediction_frames.append(
+                result.predictions.with_columns(pl.lit(spec.key).alias("target"))
             )
-        if result.decisions.height:
-            decision_frames.append(
-                result.decisions.with_columns(pl.lit(spec.key).alias("target"))
+            if result.comparison.height:
+                comparison_frames.append(
+                    result.comparison.with_columns(pl.lit(spec.key).alias("target"))
+                )
+            if result.decisions.height:
+                decision_frames.append(
+                    result.decisions.with_columns(pl.lit(spec.key).alias("target"))
+                )
+            if result.eligibility.height:
+                eligibility_frames.append(
+                    result.eligibility.with_columns(pl.lit(spec.key).alias("target"))
+                )
+            notes.extend(f"{spec.key}: {note}" for note in result.notes)
+
+        pl.concat(metrics_frames, how="diagonal_relaxed").write_csv(run_dir / "benchmark.csv")
+        pl.concat(prediction_frames, how="diagonal_relaxed").write_parquet(
+            run_dir / "predictions.parquet"
+        )
+        if comparison_frames:
+            pl.concat(comparison_frames, how="diagonal_relaxed").write_csv(
+                run_dir / "comparison.csv"
             )
-        notes.extend(f"{spec.key}: {note}" for note in result.notes)
+        if decision_frames:
+            pl.concat(decision_frames, how="diagonal_relaxed").write_csv(
+                run_dir / "decisions.csv"
+            )
+        if eligibility_frames:
+            pl.concat(eligibility_frames, how="diagonal_relaxed").write_csv(
+                run_dir / "eligibility.csv"
+            )
 
-
-    metrics_all = pl.concat(metrics_frames, how="diagonal_relaxed")
-    predictions_all = pl.concat(prediction_frames, how="diagonal_relaxed")
-    metrics_all.write_csv(run_dir / "benchmark.csv")
-    predictions_all.write_parquet(run_dir / "predictions.parquet")
-    if comparison_frames:
-        pl.concat(comparison_frames, how="diagonal_relaxed").write_csv(
-            run_dir / "comparison.csv"
-        )
-    if decision_frames:
-        pl.concat(decision_frames, how="diagonal_relaxed").write_csv(
-            run_dir / "decisions.csv"
-        )
-
+    metrics_all = pl.read_csv(run_dir / "benchmark.csv")
     manifest = {
         "run_id": run_id,
         "generated_at_utc": datetime.now(UTC).isoformat(),
@@ -454,6 +618,11 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
         "models": [s.name for s in specs],
         "seed": args.seed,
         "n_boot": args.n_boot,
+        "jobs": jobs,
+        "parallel": parallel,
+        "sampler": args.sampler,
+        "device": args.device,
+        "accelerator": _detect_accelerator(),
         "panel_path": str(panel_path),
         "panel_sha256": sha256_of(panel_path),
         "python": platform.python_version(),
@@ -471,7 +640,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     build_figures(run_dir, target_labels={spec.key: spec.label for spec in targets})
 
     print(
-        f"[benchmark] run={run_id} | alvos={len(targets)} | "
+        f"[benchmark] run={run_id} | alvos={len(targets)} | jobs={jobs} | "
         f"candidatos ok={manifest['candidates_ok']}/{manifest['candidates_total']} | "
         f"{manifest['elapsed_seconds']}s | saida={run_dir}"
     )
@@ -570,6 +739,24 @@ def build_parser() -> argparse.ArgumentParser:
         p_bench.add_argument("--run-id", type=str, default="")
         p_bench.add_argument("--seed", type=int, default=42)
         p_bench.add_argument("--n-boot", type=int, default=200)
+        p_bench.add_argument(
+            "--jobs",
+            type=int,
+            default=0,
+            help="Processos paralelos, um por alvo (0 = automático pelo número de núcleos).",
+        )
+        p_bench.add_argument(
+            "--sampler",
+            choices=("auto", "nutpie", "numpyro"),
+            default="auto",
+            help="Amostrador NUTS do bayesiano; `numpyro` habilita GPU via JAX.",
+        )
+        p_bench.add_argument(
+            "--device",
+            choices=("auto", "cpu", "gpu"),
+            default="auto",
+            help="Dispositivo do amostrador bayesiano (GPU exige numpyro+JAX).",
+        )
         p_bench.add_argument("--no-report", action="store_true", default=False)
         p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
         p_bench.add_argument("--allow-holdout", action="store_true", default=False)

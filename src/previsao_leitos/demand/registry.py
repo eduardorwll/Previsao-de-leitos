@@ -50,6 +50,7 @@ class CandidateSpec:
     factory: Callable[[], DemandForecaster]
     requires: tuple[str, ...] = ()
     is_champion: bool = False
+    online: bool = False
     description: str = ""
 
     @property
@@ -90,6 +91,18 @@ def _agaci() -> DemandForecaster:
     from previsao_leitos.demand.adaptive_conformal import AgACIConformalCalibrator
 
     return AgACIConformalCalibrator(base_model=_two_stage())
+
+
+def _gbdt_agaci() -> DemandForecaster:
+    from previsao_leitos.demand.adaptive_conformal import AgACIConformalCalibrator
+
+    return AgACIConformalCalibrator(base_model=_gbdt_v1())
+
+
+def _gbdt_spci() -> DemandForecaster:
+    from previsao_leitos.demand.adaptive_conformal import SPCIConformalCalibrator
+
+    return SPCIConformalCalibrator(base_model=_gbdt_v1())
 
 
 def _spci() -> DemandForecaster:
@@ -147,6 +160,22 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         factory=lambda: ConformalFloodCalibrator(base_model=_gbdt_v1()),
         is_champion=True,
         description="Campeão V1 auditado: GBDT monotônico + conformal (2023).",
+    ),
+    CandidateSpec(
+        name="gbdt_agaci",
+        family="gbdt+conformal-online",
+        fit_mode="cal_only",
+        factory=_gbdt_agaci,
+        online=True,
+        description="Campeão V1 + AgACI adaptativo normalizado por CNES (recalibra em 2024).",
+    ),
+    CandidateSpec(
+        name="gbdt_spci",
+        family="gbdt+conformal-online",
+        fit_mode="cal_only",
+        factory=_gbdt_spci,
+        online=True,
+        description="Campeão V1 + SPCI (QRF em resíduos, recalibra em 2024 com lag 2).",
     ),
     CandidateSpec(
         name="f041_core",

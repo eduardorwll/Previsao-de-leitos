@@ -8,6 +8,7 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from typing import Any
 
@@ -16,7 +17,7 @@ import polars as pl
 
 from previsao_leitos.demand.hierarchical_bayes import (
     HierarchicalBayesConfig,
-    build_hierarchical_model,
+    fit_hierarchical_bayes,
     validate_hierarchical_panel,
 )
 from previsao_leitos.demand.models import _enforce_non_crossing_non_negative
@@ -30,8 +31,15 @@ class HierarchicalBayesForecaster:
 
     def __init__(self, *, config: HierarchicalBayesConfig | None = None) -> None:
         # Modo benchmark: mesmas prioris, cadeias mais curtas (o gate de convergência
-        # roda no teste @slow com o default rigoroso do módulo).
-        self._config = config or HierarchicalBayesConfig(n_chains=2, n_draws=250, n_tune=250)
+        # roda no teste @slow com o default rigoroso do módulo). O backend é lido do
+        # ambiente para sobreviver ao executor paralelo por alvo.
+        self._config = config or HierarchicalBayesConfig(
+            n_chains=2,
+            n_draws=250,
+            n_tune=250,
+            nuts_sampler=os.environ.get("PREVISAO_BAYES_SAMPLER", "auto"),
+            device=os.environ.get("PREVISAO_BAYES_DEVICE", "auto"),
+        )
         self._model: Any = None
         self._idata: Any = None
         self._entities: tuple[str, ...] = ()
@@ -48,25 +56,8 @@ class HierarchicalBayesForecaster:
         self, train_df: pl.DataFrame, feature_cols: Sequence[str]
     ) -> HierarchicalBayesForecaster:
         del feature_cols
-        import pymc as pm  # lazy
-
         validated = validate_hierarchical_panel(train_df, config=self._config)
-        model = build_hierarchical_model(validated, config=self._config)
-        with model:
-            idata = pm.sample(
-                draws=self._config.n_draws,
-                tune=self._config.n_tune,
-                chains=self._config.n_chains,
-                cores=self._config.n_chains,
-                target_accept=self._config.target_accept,
-                nuts_sampler=self._config.nuts_sampler,
-                random_seed=self._config.random_seed,
-                mp_ctx=self._config.mp_ctx,
-                progressbar=False,
-            )
-        idata = pm.compute_log_likelihood(
-            idata, model=model, extend_inferencedata=True, progressbar=False
-        )
+        model, idata = fit_hierarchical_bayes(validated, config=self._config)
         self._model = model
         self._idata = idata
         self._entities = tuple(str(v) for v in idata.posterior["entity"].to_numpy())

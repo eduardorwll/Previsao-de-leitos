@@ -58,7 +58,7 @@ com calibração, catraca e relatório editorial. Tudo roda em CPU e nunca toca 
 # 1. Montar o painel de modelagem (rede só aqui; grava apenas anos <= 2024)
 uv run --no-sync python scripts/build_rs_modeling_panel.py
 
-# 2. Rodar os 11 modelos nos 4 alvos e emitir o PDF comparativo
+# 2. Rodar os 13 modelos nos 4 alvos e emitir o PDF comparativo
 uv run --no-sync previsao-leitos run --target all --models all --eval-year 2024 \
   --run-id rs_v1_3_benchmark_2024
 ```
@@ -70,6 +70,13 @@ Saídas em `reports/runs/<run-id>/`: `predictions.parquet`, `benchmark.csv`, `co
 Opções úteis: `--models champion`, `--models persistencia,f041_core`, `--no-report`,
 `--target uti_adulto` e `--seed`. O ano `2025` é bloqueado por padrão (`--allow-holdout`
 existe apenas para o `Marco M2`).
+
+**Desempenho.** `--jobs N` roda um processo por alvo (padrão: um por alvo, limitado a
+`núcleos/2`, porque cada amostragem NUTS usa 2 cadeias). Os modelos tabulares são de CPU;
+a GPU acelera apenas o amostrador bayesiano, via `--sampler numpyro --device gpu`
+(requer `numpyro` + `jax` com plugin ROCm/CUDA; sem a stack, o comando falha com instrução
+de instalação em vez de cair silenciosamente para CPU). O `run_manifest.json` registra
+`jobs`, `sampler`, `device` e o acelerador detectado.
 
 > **Fronteira clínica:** todos os artefatos são de pesquisa e avaliação metodológica —
 > *Not for patient care or live clinical use*.
