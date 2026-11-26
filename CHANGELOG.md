@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Série de necessidade de leitos (`Task 1.3.3`, Feature F18):** alvo pré-registrado `necessidade = max(ocupação, baseline + w · excesso · LOS)`, com baseline sazonal corrigido por nível estadual, LOS estritamente passado e piso de ocupação (A7). Três versões documentadas em `docs/preregistro/` (v1 → v3), cada uma corrigindo uma falha detectada na validação de face; critério de monotonicidade trocado por teste estrutural (`w + 0,2` não reduz a série). Série em `data/processed/rs_need_<alvo>_v3.parquet` com manifesto SHA-256.
+
+### Added
 - **Régua de backtest de origem móvel (`Task 1.3.2`, Feature F17):** comando `previsao-leitos backtest` que avalia modelos em folds `2019–2024` (`train <= y-2`, calibração `y-1`), com ranking por **MASE mediano entre folds**, MASE macro robusto a regiões degeneradas, erro de pico com sinal, métrica evento-condicional e decomposição nível × fase; saída em CSV, figuras 300 DPI e PDF por alvo.
 
 ### Removed
