@@ -49,6 +49,33 @@ uv run pip-audit
 
 ---
 
+## Benchmark de Modelos em Um Comando
+
+O benchmark compara **leitos ocupados observados vs. preditos** por modelo, alvo e região,
+com calibração, catraca e relatório editorial. Tudo roda em CPU e nunca toca o holdout.
+
+```bash
+# 1. Montar o painel de modelagem (rede só aqui; grava apenas anos <= 2024)
+uv run --no-sync python scripts/build_rs_modeling_panel.py
+
+# 2. Rodar os 11 modelos nos 4 alvos e emitir o PDF comparativo
+uv run --no-sync previsao-leitos run --target all --models all --eval-year 2024 \
+  --run-id rs_v1_3_benchmark_2024
+```
+
+Saídas em `reports/runs/<run-id>/`: `predictions.parquet`, `benchmark.csv`, `comparison.csv`,
+`decisions.csv`, `run_manifest.json`, três figuras por alvo e `relatorio_benchmark_leitos.pdf`
+(espelhado em `~/Downloads/` com SHA-256 conferido).
+
+Opções úteis: `--models champion`, `--models persistencia,f041_core`, `--no-report`,
+`--target uti_adulto` e `--seed`. O ano `2025` é bloqueado por padrão (`--allow-holdout`
+existe apenas para o `Marco M2`).
+
+> **Fronteira clínica:** todos os artefatos são de pesquisa e avaliação metodológica —
+> *Not for patient care or live clinical use*.
+
+---
+
 ## Histórico Experimental Inicial (Protótipo Legado — `legacy/previsao_leitos_colab.py`)
 
 As seções abaixo documentam a evolução exploratória das **3 fases iniciais** executadas em protótipo Colab (2010–2025), que motivaram a reestruturação modular e científica registrada em [docs/PROGRESSO.md](docs/PROGRESSO.md) e nos [ADRs 0001–0005](docs/adr/).

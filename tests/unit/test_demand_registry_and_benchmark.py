@@ -72,13 +72,13 @@ def test_registry_exposes_all_candidates_and_champion() -> None:
     names = [spec.name for spec in list_candidates()]
     assert names[0] == "persistencia"
     assert "f041_mondrian" in names
-    assert champion_spec().name == "f041_mondrian"
+    assert champion_spec().name == "gbdt_conformal"
     assert get_candidate("hierarchical_bayes").requires == ("pymc", "arviz")
 
 
 def test_resolve_selection_supports_all_champion_baselines_and_list() -> None:
     assert len(resolve_selection("all")) == len(list_candidates())
-    assert [s.name for s in resolve_selection("champion")] == ["f041_mondrian"]
+    assert [s.name for s in resolve_selection("champion")] == ["gbdt_conformal"]
     assert all(s.family == "baseline" for s in resolve_selection("baselines"))
     assert [s.name for s in resolve_selection("persistencia,ridge_pooled")] == [
         "persistencia",
@@ -137,7 +137,7 @@ def test_benchmark_produces_metrics_predictions_and_decisions() -> None:
     result = run_benchmark(
         splits,
         run_id="unit-test",
-        candidates="persistencia,sazonal_ingenuo,ridge_pooled,f041_core,f041_mondrian",
+        candidates="persistencia,sazonal_ingenuo,ridge_pooled,f041_core,gbdt_conformal",
         n_boot=20,
         seed=7,
     )
@@ -147,7 +147,7 @@ def test_benchmark_produces_metrics_predictions_and_decisions() -> None:
         "sazonal_ingenuo",
         "ridge_pooled",
         "f041_core",
-        "f041_mondrian",
+        "gbdt_conformal",
     }
     assert (result.metrics.filter(pl.col("status") == "ok").height) >= 3
     for column in ("mase_vs_pers", "pinball_p95", "cobertura_p10_p90", "monotonic_violations"):

@@ -29,7 +29,9 @@ class HierarchicalBayesForecaster:
     """Pooling parcial `Região ⊂ Bacia` com quantis preditivos via posterior de `mu`."""
 
     def __init__(self, *, config: HierarchicalBayesConfig | None = None) -> None:
-        self._config = config or HierarchicalBayesConfig(n_draws=600, n_tune=600)
+        # Modo benchmark: mesmas prioris, cadeias mais curtas (o gate de convergência
+        # roda no teste @slow com o default rigoroso do módulo).
+        self._config = config or HierarchicalBayesConfig(n_chains=2, n_draws=250, n_tune=250)
         self._model: Any = None
         self._idata: Any = None
         self._entities: tuple[str, ...] = ()

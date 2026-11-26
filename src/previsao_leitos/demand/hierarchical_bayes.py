@@ -236,13 +236,14 @@ def build_hierarchical_model(
             eta_trend = pm.Normal("eta_trend", mu=0.0, sigma=0.1)
             log_rate = log_rate + eta_trend * design.trend
 
+        # ADR-0001: enchente nunca reduz demanda. A inclinação do choque é estritamente
+        # positiva por construção; um `Normal` permitia slope negativo e violava o gate.
         if cfg.hierarchical_shock_slope:
-            mu_delta = pm.Normal("mu_delta", mu=0.2, sigma=0.5)
             sigma_delta = pm.HalfNormal("sigma_delta", sigma=0.3)
-            delta_basin = pm.Normal("delta_basin", mu=mu_delta, sigma=sigma_delta, dims="basin")
+            delta_basin = pm.HalfNormal("delta_basin", sigma=sigma_delta, dims="basin")
             log_rate = log_rate + delta_basin[design.basin_index] * design.shock
         else:
-            delta_shock = pm.Normal("delta_shock", mu=0.2, sigma=0.3)
+            delta_shock = pm.HalfNormal("delta_shock", sigma=0.3)
             log_rate = log_rate + delta_shock * design.shock
 
         alpha = pm.LogNormal("alpha", mu=4.0, sigma=1.5)

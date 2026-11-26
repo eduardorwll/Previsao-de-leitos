@@ -341,6 +341,233 @@ def _cmd_verify_rs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _git_sha() -> str:
+    """SHA curto do commit atual, ou `unknown` fora de um repositório Git."""
+    import subprocess
+
+    try:
+        return subprocess.check_output(
+            ["/usr/bin/git", "rev-parse", "--short", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def _plot_models(metrics: pl.DataFrame, *, max_models: int = 2) -> list[str]:
+    """Escolhe campeão + melhor MASE para as figuras, sem poluir o gráfico."""
+    ok = metrics.filter(pl.col("status") == "ok")
+    if ok.height == 0:
+        return []
+    ordered = ok.sort("mase_vs_pers")
+    chosen: list[str] = []
+    champion = ok.filter(pl.col("is_champion"))
+    if champion.height:
+        chosen.append(str(champion["candidate"][0]))
+    for name in ordered["candidate"].to_list():
+        if name not in chosen:
+            chosen.append(str(name))
+        if len(chosen) >= max_models:
+            break
+    return chosen
+
+
+def _cmd_benchmark(args: argparse.Namespace) -> int:
+    import json
+    import time
+    from datetime import UTC, datetime
+
+    from previsao_leitos.audit.benchmark_report import (
+        mirror_to_downloads,
+        render_report,
+        sha256_of,
+    )
+    from previsao_leitos.audit.comparison_plots import (
+        plot_calibration,
+        plot_observed_vs_predicted,
+        plot_residuals_by_region,
+    )
+    from previsao_leitos.audit.model_benchmark import run_benchmark
+    from previsao_leitos.demand.modeling import make_modeling_splits, resolve_targets
+    from previsao_leitos.demand.registry import resolve_selection
+
+    panel_path = Path(args.panel_path)
+    if not panel_path.exists():
+        print(
+            f"[erro] painel de modelagem ausente: {panel_path}. "
+            "Rode `python scripts/build_rs_modeling_panel.py`."
+        )
+        return 2
+
+    request_start = time.perf_counter()
+    panel = pl.read_parquet(panel_path)
+    run_id = args.run_id or (
+        f"rs_benchmark_{args.eval_year}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+    )
+    run_dir = Path(args.output_dir) / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    specs = resolve_selection(args.models)
+    target_selection: str | tuple[str, ...] = args.target
+    if isinstance(target_selection, str) and "," in target_selection:
+        target_selection = tuple(p.strip() for p in target_selection.split(",") if p.strip())
+    targets = resolve_targets(target_selection)
+    metrics_frames: list[pl.DataFrame] = []
+    prediction_frames: list[pl.DataFrame] = []
+    comparison_frames: list[pl.DataFrame] = []
+    decision_frames: list[pl.DataFrame] = []
+    notes: list[str] = []
+
+    from previsao_leitos.domain import DataContractError
+
+    for spec in targets:
+        try:
+            splits = make_modeling_splits(
+                panel,
+                target=spec.key,
+                eval_year=args.eval_year,
+                allow_holdout=args.allow_holdout,
+            )
+        except DataContractError as exc:
+            print(f"[erro] {spec.key}: {exc}")
+            return 3
+        result = run_benchmark(
+            splits,
+            run_id=f"{run_id}:{spec.key}",
+            candidates=[s.name for s in specs],
+            n_boot=args.n_boot,
+            seed=args.seed,
+        )
+        metrics_frames.append(result.metrics.with_columns(pl.lit(spec.key).alias("target")))
+        prediction_frames.append(
+            result.predictions.with_columns(pl.lit(spec.key).alias("target"))
+        )
+        if result.comparison.height:
+            comparison_frames.append(
+                result.comparison.with_columns(pl.lit(spec.key).alias("target"))
+            )
+        if result.decisions.height:
+            decision_frames.append(
+                result.decisions.with_columns(pl.lit(spec.key).alias("target"))
+            )
+        notes.extend(f"{spec.key}: {note}" for note in result.notes)
+
+        ok = result.metrics.filter(pl.col("status") == "ok")
+        plot_models = _plot_models(ok)
+        if plot_models:
+            plot_observed_vs_predicted(
+                result.predictions,
+                models=plot_models,
+                output_path=run_dir / f"fig_observed_vs_predicted_{spec.key}.png",
+                target_label=spec.label,
+                eval_year=args.eval_year,
+            )
+            if result.comparison.height:
+                plot_residuals_by_region(
+                    result.comparison,
+                    models=plot_models,
+                    output_path=run_dir / f"fig_residuals_{spec.key}.png",
+                    target_label=spec.label,
+                )
+            plot_calibration(
+                ok,
+                output_path=run_dir / f"fig_calibration_{spec.key}.png",
+                target_label=spec.label,
+            )
+
+    metrics_all = pl.concat(metrics_frames, how="diagonal_relaxed")
+    predictions_all = pl.concat(prediction_frames, how="diagonal_relaxed")
+    metrics_all.write_csv(run_dir / "benchmark.csv")
+    predictions_all.write_parquet(run_dir / "predictions.parquet")
+    if comparison_frames:
+        pl.concat(comparison_frames, how="diagonal_relaxed").write_csv(
+            run_dir / "comparison.csv"
+        )
+    if decision_frames:
+        pl.concat(decision_frames, how="diagonal_relaxed").write_csv(
+            run_dir / "decisions.csv"
+        )
+
+    manifest = {
+        "run_id": run_id,
+        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "git_sha": _git_sha(),
+        "eval_year": args.eval_year,
+        "targets": [spec.key for spec in targets],
+        "models": [s.name for s in specs],
+        "seed": args.seed,
+        "n_boot": args.n_boot,
+        "panel_path": str(panel_path),
+        "panel_sha256": sha256_of(panel_path),
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "elapsed_seconds": round(time.perf_counter() - request_start, 2),
+        "candidates_ok": int(metrics_all.filter(pl.col("status") == "ok").height),
+        "candidates_total": metrics_all.height,
+        "notes": notes,
+        "holdout_policy": "anos >= 2025 bloqueados; generalização avaliada apenas no M2",
+        "disclaimer": "Not for patient care or live clinical use",
+    }
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    print(
+        f"[benchmark] run={run_id} | alvos={len(targets)} | "
+        f"candidatos ok={manifest['candidates_ok']}/{manifest['candidates_total']} | "
+        f"{manifest['elapsed_seconds']}s | saida={run_dir}"
+    )
+    best = (
+        metrics_all.filter(pl.col("status") == "ok")
+        .sort("mase_vs_pers")
+        .select(["target", "candidate", "mase_vs_pers", "cobertura_p10_p90"])
+        .head(5)
+    )
+    print(best)
+
+    if not args.no_report:
+        _, pdf_path = render_report(
+            run_dir,
+            target_labels={spec.key: spec.label for spec in targets},
+            eval_year=args.eval_year,
+            models_requested=[s.name for s in specs],
+        )
+        print(f"[benchmark] PDF: {pdf_path}")
+        if not args.no_mirror_downloads:
+            mirrored = mirror_to_downloads(pdf_path)
+            print(f"[benchmark] espelho verificado (SHA-256): {mirrored}")
+    return 0
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    from previsao_leitos.audit.benchmark_report import mirror_to_downloads, render_report
+    from previsao_leitos.demand.modeling import TARGET_SPECS
+
+    run_dir = Path(args.output_dir) / args.run_id
+    metrics_path = run_dir / "benchmark.csv"
+    if not metrics_path.exists():
+        print(f"[erro] benchmark.csv ausente em {run_dir}")
+        return 2
+    metrics = pl.read_csv(metrics_path)
+    targets = [t for t in metrics["target"].unique().to_list() if t in TARGET_SPECS]
+    if not targets:
+        print("[erro] nenhum alvo reconhecido em benchmark.csv")
+        return 2
+    models = sorted({str(m) for m in metrics["candidate"].unique().to_list()})
+    _, pdf_path = render_report(
+        run_dir,
+        target_labels={t: TARGET_SPECS[t].label for t in targets},
+        eval_year=args.eval_year,
+        models_requested=models,
+    )
+    print(f"[report] PDF: {pdf_path}")
+    if not args.no_mirror_downloads:
+        mirrored = mirror_to_downloads(pdf_path)
+        print(f"[report] espelho verificado (SHA-256): {mirrored}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Constrói o parser da CLI `previsao-leitos`."""
     parser = argparse.ArgumentParser(
@@ -349,6 +576,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Verifica ambiente e prontidão das bases locais em JSON.")
+
+    for name, help_text in (
+        ("benchmark", "Treina, avalia e compara todos os modelos e gera o relatório PDF."),
+        ("run", "Executa benchmark completo e relatório em um único comando."),
+    ):
+        p_bench = sub.add_parser(name, help=help_text)
+        p_bench.add_argument(
+            "--target",
+            type=str,
+            default="all",
+            help=(
+                "all | uti_adulto | uti_total | clinico | respiratorio "
+                "(ou lista separada por vírgula)."
+            ),
+        )
+        p_bench.add_argument("--eval-year", type=int, default=2024)
+        p_bench.add_argument(
+            "--models",
+            type=str,
+            default="all",
+            help="all | champion | baselines | lista separada por vírgula.",
+        )
+        p_bench.add_argument(
+            "--panel-path",
+            type=str,
+            default="data/processed/rs_modeling_panel_v3.parquet",
+        )
+        p_bench.add_argument("--output-dir", type=str, default="reports/runs")
+        p_bench.add_argument("--run-id", type=str, default="")
+        p_bench.add_argument("--seed", type=int, default=42)
+        p_bench.add_argument("--n-boot", type=int, default=200)
+        p_bench.add_argument("--no-report", action="store_true", default=False)
+        p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
+        p_bench.add_argument("--allow-holdout", action="store_true", default=False)
+
+    p_report = sub.add_parser("report", help="Regera o PDF editorial a partir de um run existente.")
+    p_report.add_argument("--run-id", type=str, required=True)
+    p_report.add_argument("--output-dir", type=str, default="reports/runs")
+    p_report.add_argument("--eval-year", type=int, default=2024)
+    p_report.add_argument("--no-mirror-downloads", action="store_true", default=False)
 
     p_ver = sub.add_parser(
         "verify-rs",
@@ -378,6 +645,10 @@ def cli_main(argv: Sequence[str] | None = None) -> int:
         return _cmd_doctor()
     if args.command == "verify-rs":
         return _cmd_verify_rs(args)
+    if args.command in ("benchmark", "run"):
+        return _cmd_benchmark(args)
+    if args.command == "report":
+        return _cmd_report(args)
     return 1
 
 

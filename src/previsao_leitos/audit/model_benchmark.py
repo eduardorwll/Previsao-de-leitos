@@ -355,14 +355,13 @@ def run_benchmark(
         notes.append(
             f"Campeão '{champion_spec().name}' não incluído na seleção; catraca omitida."
         )
-    try:
-        if (
-            "mae_sazonal" in metrics_df.columns
-            and metrics_df["mae_sazonal"].is_nan().all()
-        ):
+    if "mae_sazonal" in metrics_df.columns:
+        seasonal = metrics_df["mae_sazonal"]
+        all_missing = seasonal.null_count() == seasonal.len() or bool(
+            seasonal.is_nan().fill_null(True).all()
+        )
+        if all_missing:
             notes.append("Sazonal-ingênuo indisponível no painel (lag 52 incompleto).")
-    except (pl.exceptions.SchemaError, TypeError):
-        pass
 
     return BenchmarkResult(
         run_id=run_id,

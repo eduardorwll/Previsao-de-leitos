@@ -145,7 +145,8 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         family="gbdt+conformal",
         fit_mode="train_cal",
         factory=lambda: ConformalFloodCalibrator(base_model=_gbdt_v1()),
-        description="Campeão V1 + calibração conformal heterocedástica (2023).",
+        is_champion=True,
+        description="Campeão V1 auditado: GBDT monotônico + conformal (2023).",
     ),
     CandidateSpec(
         name="f041_core",
@@ -159,8 +160,7 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         family="2-estagios+conformal",
         fit_mode="cal_only",
         factory=_mondrian,
-        is_champion=True,
-        description="Campeão V1.2: F04.1 + Mondrian ENSO/porte com cauda EVT.",
+        description="Challenger V1.2: F04.1 + Mondrian ENSO/porte com cauda EVT.",
     ),
     CandidateSpec(
         name="f041_agaci",
