@@ -9,8 +9,8 @@ hidrologia calibrada, modelos probabilísticos de demanda, simulação de filas,
 contrafactual e — desde a `v1.3.0` — **um comando único** que roda 13 modelos em 4 alvos,
 compara leitos observados e preditos e emite um relatório em PDF.
 
-[![CI](https://github.com/GuilhermeSPedroso07/Previsao-de-leitos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/GuilhermeSPedroso07/Previsao-de-leitos/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.3.0-0f766e)](https://github.com/GuilhermeSPedroso07/Previsao-de-leitos/releases/tag/v1.3.0)
+[![CI](https://github.com/eduardorwll/Previsao-de-leitos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/eduardorwll/Previsao-de-leitos/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.3.0-0f766e)](https://github.com/eduardorwll/Previsao-de-leitos/releases/tag/v1.3.0)
 [![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20by-uv-DE5FE9)](https://docs.astral.sh/uv/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://docs.astral.sh/ruff/)
@@ -59,7 +59,7 @@ AMD/NVIDIA é opcional (ROCm/CUDA) e acelera apenas o treino da rede hidrológic
 amostrador bayesiano.
 
 ```bash
-git clone https://github.com/GuilhermeSPedroso07/Previsao-de-leitos.git
+git clone https://github.com/eduardorwll/Previsao-de-leitos.git
 cd Previsao-de-leitos
 
 # ambiente de desenvolvimento (CPU) + extras de ciência de dados
@@ -222,7 +222,7 @@ Se este material apoiar sua pesquisa, cite a release:
   year         = {2026},
   version      = {1.3.0},
   license      = {MIT},
-  url          = {https://github.com/GuilhermeSPedroso07/Previsao-de-leitos}
+  url          = {https://github.com/eduardorwll/Previsao-de-leitos}
 }
 ```
 
