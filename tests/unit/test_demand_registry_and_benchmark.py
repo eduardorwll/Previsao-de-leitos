@@ -295,3 +295,34 @@ def test_rolling_backtest_blocks_holdout_years() -> None:
             candidates="persistencia",
             n_boot=5,
         )
+
+
+def test_local_level_stage1_improves_over_harmonics_only() -> None:
+    """O nível local deve reduzir o erro no treino, sem violar monotonicidade."""
+    from previsao_leitos.audit.model_benchmark import _count_shock_response_violations
+    from previsao_leitos.demand.two_stage import OrthogonalTwoStageOccupancyForecaster
+
+    panel = _synthetic_panel()
+    splits = make_modeling_splits(panel, target="uti_adulto", eval_year=2024)
+    common = {
+        "capacity_col": "capacidade_sem",
+        "basal_cols": ("target_week_sin", "target_week_cos"),
+        "min_samples_leaf": 8,
+        "random_state": 42,
+    }
+    base = OrthogonalTwoStageOccupancyForecaster(**common).fit(
+        splits.train_df, splits.feature_cols
+    )
+    local = OrthogonalTwoStageOccupancyForecaster(
+        **common, use_local_level=True
+    ).fit(splits.train_df, splits.feature_cols)
+
+    observed = splits.eval_df["target_y"].to_numpy()
+    base_p50 = base.predict_quantiles(splits.eval_df)["pred_p50"].to_numpy()
+    local_p50 = local.predict_quantiles(splits.eval_df)["pred_p50"].to_numpy()
+    mae_base = float(np.mean(np.abs(base_p50 - observed)))
+    mae_local = float(np.mean(np.abs(local_p50 - observed)))
+    assert mae_local < mae_base
+    assert _count_shock_response_violations(local, splits.eval_df) == 0
+    components = local.predict_stage_components(splits.eval_df)
+    assert components.shock_matrix.shape[0] == splits.eval_df.height

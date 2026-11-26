@@ -67,6 +67,16 @@ def _two_stage() -> OrthogonalTwoStageOccupancyForecaster:
     )
 
 
+def _two_stage_local_level() -> OrthogonalTwoStageOccupancyForecaster:
+    return OrthogonalTwoStageOccupancyForecaster(
+        capacity_col="capacidade_sem",
+        basal_cols=("target_week_sin", "target_week_cos"),
+        min_samples_leaf=8,
+        random_state=42,
+        use_local_level=True,
+    )
+
+
 def _gbdt_v1() -> QuantileGBDTForecaster:
     return QuantileGBDTForecaster(
         monotone_positive_prefixes=_GBDT_MONO_POS,
@@ -81,7 +91,7 @@ def _mondrian() -> DemandForecaster:
     from previsao_leitos.demand.extreme_uncertainty import MondrianEnsoConformalCalibrator
 
     return MondrianEnsoConformalCalibrator(
-        base_model=_two_stage(),
+        base_model=_two_stage_local_level(),
         group_cols=("porte_regional", "enso_regime"),
         use_evt_p95=True,
     )
@@ -90,7 +100,7 @@ def _mondrian() -> DemandForecaster:
 def _agaci() -> DemandForecaster:
     from previsao_leitos.demand.adaptive_conformal import AgACIConformalCalibrator
 
-    return AgACIConformalCalibrator(base_model=_two_stage())
+    return AgACIConformalCalibrator(base_model=_two_stage_local_level())
 
 
 def _gbdt_agaci() -> DemandForecaster:
@@ -108,7 +118,7 @@ def _gbdt_spci() -> DemandForecaster:
 def _spci() -> DemandForecaster:
     from previsao_leitos.demand.adaptive_conformal import SPCIConformalCalibrator
 
-    return SPCIConformalCalibrator(base_model=_two_stage())
+    return SPCIConformalCalibrator(base_model=_two_stage_local_level())
 
 
 def _hierarchical() -> DemandForecaster:
@@ -183,6 +193,13 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         fit_mode="plain",
         factory=_two_stage,
         description="Núcleo ortogonal F04.1 (basal + choque monotônico).",
+    ),
+    CandidateSpec(
+        name="f041_local_level",
+        family="2-estagios+nivel-local",
+        fit_mode="plain",
+        factory=_two_stage_local_level,
+        description="F04.1 com nível local suavizado (y_roll12/capacidade) no Estágio 1.",
     ),
     CandidateSpec(
         name="f041_mondrian",

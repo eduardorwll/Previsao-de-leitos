@@ -124,6 +124,8 @@ class OrthogonalTwoStageOccupancyForecaster:
         min_samples_leaf: int = 8,
         learning_rate: float = 0.05,
         random_state: int = 42,
+        use_local_level: bool = False,
+        level_source: str = "y_roll12",
     ) -> None:
         self._capacity_col = capacity_col
         self._basal_cols_cfg = tuple(basal_cols)
@@ -135,6 +137,8 @@ class OrthogonalTwoStageOccupancyForecaster:
         self._min_samples_leaf = min_samples_leaf
         self._lr = learning_rate
         self._seed = random_state
+        self._use_local_level = use_local_level
+        self._level_source = level_source
 
         self._basal_cols: tuple[str, ...] = ()
         self._shock_cols: tuple[str, ...] = ()
@@ -220,6 +224,25 @@ class OrthogonalTwoStageOccupancyForecaster:
                 raise DataContractError(
                     f"Coluna basal '{col}' ausente no DataFrame de inferência da F04.1."
                 )
+        if self._use_local_level:
+            # Nível local suavizado (média móvel de 12 semanas) em taxa relativa: fornece
+            # âncora de patamar ao Estágio 1 sem copiar a última observação (que causaria
+            # atraso de fase). Não é AR de curto prazo: usa média, não `y_origin`.
+            if self._level_source not in df.columns:
+                raise DataContractError(
+                    f"Nível local exige a coluna '{self._level_source}' na inferência da F04.1."
+                )
+            if self._capacity_col is not None and self._capacity_col in df.columns:
+                cap_expr = (
+                    pl.col(self._capacity_col).cast(pl.Float64).fill_null(1.0).clip(lower_bound=1.0)
+                )
+            else:
+                cap_expr = pl.lit(1.0, dtype=pl.Float64)
+            selected.append(
+                (
+                    pl.col(self._level_source).cast(pl.Float64).fill_null(0.0) / cap_expr
+                ).alias("_local_level_rate")
+            )
         mat = df.select(selected).to_numpy().astype(np.float64)
         return np.asarray(np.nan_to_num(mat, nan=0.0, posinf=0.0, neginf=0.0), dtype=np.float64)
 

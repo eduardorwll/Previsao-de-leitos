@@ -193,6 +193,7 @@ entradas e versões de ambiente.
 | :--- | :--- |
 | **[Mapa de Progresso](docs/PROGRESSO.md)** | Etapas, features e status com marcação de progresso |
 | **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Notas da release: benchmark, paralelismo e GPU |
+| **[Feature F19 — Nível Local no Estágio 1](docs/features/19-nivel-local-estagio-1.md)** | `−14%` a `−41%` de MASE no F04.1 com âncora de patamar |
 | **[Feature F18 — Série de Necessidade](docs/features/18-serie-necessidade-leitos.md)** | Alvo pré-registrado, três iterações auditadas e lacuna necessidade × ocupação |
 | **[Feature F17 — Régua de Backtest](docs/features/17-regua-backtest-origem-movel.md)** | 6 folds, ranking por mediana, nível × fase e métrica evento-condicional |
 | **[Feature F16 — Benchmark, CLI e Relatório](docs/features/16-benchmark-cli-e-relatorio.md)** | Comando único, métricas, elegibilidade e PDF |

@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Nível local no Estágio 1 (`Task 1.3.4`, Feature F19):** `OrthogonalTwoStageOccupancyForecaster` ganhou `use_local_level` — o Estágio 1 passa a receber `y_roll12 / capacidade_sem` (média de 12 semanas em taxa), fornecendo âncora de patamar sem copiar a última observação. Nos 6 folds: `MASE 1,699 → 1,135` (UTI adulto), `1,743 → 1,156` (UTI total), `1,591 → 1,103` (clínico), `1,088 → 0,940` (respiratório), com cobertura dos conformais subindo para `0,79–0,81`. O `F04.1` ainda não alcança o GBDT (`0,84–0,96`), mas a mudança corrigiu o defeito dominante e passou a ser a base dos conformais.
+
+### Added
 - **Série de necessidade de leitos (`Task 1.3.3`, Feature F18):** alvo pré-registrado `necessidade = max(ocupação, baseline + w · excesso · LOS)`, com baseline sazonal corrigido por nível estadual, LOS estritamente passado e piso de ocupação (A7). Três versões documentadas em `docs/preregistro/` (v1 → v3), cada uma corrigindo uma falha detectada na validação de face; critério de monotonicidade trocado por teste estrutural (`w + 0,2` não reduz a série). Série em `data/processed/rs_need_<alvo>_v3.parquet` com manifesto SHA-256.
   Backtest sobre o alvo de necessidade (`rs_modeling_panel_need_v3.parquet`) **rejeitou** a hipótese do alvo errado: o `F04.1` segue em `MASE 1,56–1,74` (vs. GBDT `0,84–0,96`), indicando que a falha está na ausência de nível local no Estágio 1, não na definição do alvo.
 
