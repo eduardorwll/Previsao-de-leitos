@@ -74,7 +74,24 @@ def main(argv: list[str] | None = None) -> int:
         if not ok:
             failures += 1
             print(f"  critérios: {criteria}")
+    if failures == 0:
+        _write_need_panel(panel, keys)
     return 1 if failures else 0
+
+
+def _write_need_panel(panel: pl.DataFrame, keys: list[str]) -> None:
+    """Anexa as colunas `need_<alvo>` ao painel de modelagem."""
+    joined = panel
+    for key in keys:
+        series = pl.read_parquet(DATA_PROCESSED / f"rs_need_{key}_v3.parquet").select(
+            ["nome_regiao_saude", "ano_epi", "semana_epi", pl.col("need").alias(f"need_{key}")]
+        )
+        joined = joined.join(
+            series, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
+        )
+    out = DATA_PROCESSED / "rs_modeling_panel_need_v3.parquet"
+    joined.write_parquet(out)
+    print(f"[OK] painel de necessidade: {out} ({joined.height:,} linhas)")
 
 
 if __name__ == "__main__":  # pragma: no cover

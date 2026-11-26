@@ -707,7 +707,12 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
     excluded = {name.strip() for name in args.exclude.split(",") if name.strip()}
     selected = [spec.name for spec in resolve_selection(args.models) if spec.name not in excluded]
     years = _parse_years(args.folds)
-    targets = resolve_targets(args.target)
+    target_selection: str | tuple[str, ...] = args.target
+    if isinstance(target_selection, str) and "," in target_selection:
+        target_selection = tuple(
+            part.strip() for part in target_selection.split(",") if part.strip()
+        )
+    targets = resolve_targets(target_selection)
 
     fold_frames: list[pl.DataFrame] = []
     summary_frames: list[pl.DataFrame] = []

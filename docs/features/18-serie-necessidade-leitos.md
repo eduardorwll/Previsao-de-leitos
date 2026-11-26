@@ -90,8 +90,33 @@ têm lacuna pequena — a série assume o piso observado em vez de inventar nece
 
 ---
 
-## 7. Próximo passo
+## 7. Teste da hipótese: o alvo era o problema?
 
-Rodar o **backtest (S1) sobre a série de necessidade** e comparar o ranking com o da ocupação.
-Se o `F04.1` recuperar posições, isso confirma a hipótese do alvo errado; se não, o gargalo é
-o lag do choque (S3).
+Backtest de origem móvel (`2019–2024`, 12 modelos, `hierarchical_bayes` excluído por custo)
+rodado sobre ocupação e sobre necessidade:
+
+| Modelo | UTI ocupação | UTI necessidade | Clínico ocupação | Clínico necessidade | Resp. ocupação | Resp. necessidade |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gbdt_v1` | 0,943 | 0,959 | 0,924 | **0,884** | 0,866 | **0,840** |
+| `ridge_pooled` | 0,958 | **0,955** | 0,974 | 0,955 | 0,868 | 0,853 |
+| persistência | 1,000 | 1,000 | 1,000 | 1,000 | 1,000 | 1,000 |
+| **`f041_core`** | 1,699 | 1,743 | 1,591 | 1,563 | 1,088 | 1,168 |
+
+**Resultado: hipótese rejeitada.** O `F04.1` não se recupera com o alvo correto — segue em
+`1,56–1,74`, muito atrás do GBDT. O problema não estava no alvo: está na **ausência de nível
+local** no Estágio 1 (Ridge só com harmônicos). Isso explica por que o `ridge_pooled`, que
+carrega `y_roll12`, é o melhor em UTI sob necessidade.
+
+Ganhos secundários do alvo de necessidade: clínico `0,924 → 0,884` e respiratório
+`0,866 → 0,840`. O erro de fase **não** melhorou (`4,3–7,4` semanas contra `2,0–2,7` da
+persistência).
+
+Limitação: a série começa em `2017` (o baseline exige 3 anos), então os primeiros folds têm
+menos treino que o backtest de ocupação — todos os modelos são penalizados igualmente.
+
+## 8. Próximo passo (repriorizado pela evidência)
+
+1. **Nível local no Estágio 1** (substituir Harmônicos-only por nível + sazonalidade): ataca
+   a causa identificada, não o sintoma.
+2. **Lag distribuído do choque** (`0..8` semanas): ataca as `4–7` semanas de erro de fase.
+3. Só depois: multi-target, ensemble, conforme o plano.

@@ -105,6 +105,24 @@ TARGET_SPECS: dict[str, TargetSpec] = {
 }
 
 
+#: Alvos de **necessidade** (pré-registro v3), derivados dos alvos de ocupação.
+NEED_TARGET_SPECS: dict[str, TargetSpec] = {
+    f"need_{key}": TargetSpec(
+        key=f"need_{key}",
+        column=f"need_{key}",
+        label=f"Necessidade — {spec.label}",
+        unit=spec.unit,
+        capacity_column=spec.capacity_column,
+        capacity_scale=spec.capacity_scale,
+        large_region_threshold=spec.large_region_threshold,
+    )
+    for key, spec in TARGET_SPECS.items()
+}
+
+#: Catálogo completo (ocupação + necessidade).
+ALL_TARGET_SPECS: dict[str, TargetSpec] = {**TARGET_SPECS, **NEED_TARGET_SPECS}
+
+
 @dataclass(frozen=True)
 class ModelingSplits:
     """Partições causais prontas para treino, calibração conformal e avaliação."""
@@ -126,12 +144,12 @@ def resolve_targets(selection: str | Sequence[str]) -> tuple[TargetSpec, ...]:
         keys = tuple(TARGET_SPECS) if selection == "all" else (selection,)
     else:
         keys = tuple(selection)
-    unknown = [k for k in keys if k not in TARGET_SPECS]
+    unknown = [k for k in keys if k not in ALL_TARGET_SPECS]
     if unknown:
         raise DataContractError(
-            f"Alvos desconhecidos: {unknown}. Disponíveis: {sorted(TARGET_SPECS)}."
+            f"Alvos desconhecidos: {unknown}. Disponíveis: {sorted(ALL_TARGET_SPECS)}."
         )
-    return tuple(TARGET_SPECS[k] for k in keys)
+    return tuple(ALL_TARGET_SPECS[k] for k in keys)
 
 
 def attach_capacity(panel: pl.DataFrame, spec: TargetSpec) -> pl.DataFrame:
@@ -185,7 +203,7 @@ def make_modeling_splits(
     allow_holdout: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
-    spec = TARGET_SPECS[target] if isinstance(target, str) else target
+    spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
     active_policy = policy or SplitPolicy()
     if eval_year >= active_policy.holdout_year and not allow_holdout:
         raise DataContractError(
