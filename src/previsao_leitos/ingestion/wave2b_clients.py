@@ -34,7 +34,9 @@ from previsao_leitos.ingestion.wave2a_clients import (
 )
 
 MERGE_CPTEC_DAILY_BASE_URL = "https://ftp.cptec.inpe.br/modelos/tempo/MERGE/GPM/DAILY"
-ANA_HIDROWEB_AUTH_URL = "https://www.ana.gov.br/hidrowebservice/EstacoesTelemetricas/OAuth/v1"
+ANA_HIDROWEB_AUTH_URL = (
+    "https://www.ana.gov.br/hidrowebservice/EstacoesTelemetricas/OAUth/v1"
+)
 ANA_HIDROWEB_SERIES_URL = (
     "https://www.ana.gov.br/hidrowebservice/EstacoesTelemetricas/HidroinfoanaSerieTelemetricaAdotada/v1"
 )
@@ -231,7 +233,8 @@ class AnaHidrowebClient:
         for code in codes_tuple:
             url = (
                 f"{ANA_HIDROWEB_SERIES_URL}?"
-                f"Codigo_Estacao={code}&Tipo_Filtro_Data=DATA_LEITURA&Range_Intervalo=DIAS_30"
+                f"CodigoDaEstacao={code}&TipoFiltroData=DATA_LEITURA"
+                "&RangeIntervaloDeBusca=DIAS_30"
             )
             req = urllib.request.Request(  # noqa: S310
                 url,

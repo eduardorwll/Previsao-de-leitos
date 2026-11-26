@@ -24,6 +24,7 @@ import polars as pl
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from previsao_leitos.audit import brier_skill_score, expected_calibration_error
+from previsao_leitos.domain import SourceUnavailableError
 from previsao_leitos.geo import (
     NasaPowerHydroAdapter,
     OpenMeteoEra5Adapter,
@@ -76,6 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seeds", type=str, default="42,137,2024")
     parser.add_argument("--preload-vram", action="store_true")
+    parser.add_argument(
+        "--require-live-ana",
+        action="store_true",
+        help="Falha se a série ANA API v2 não for usada (desativa o fallback Zenodo silencioso).",
+    )
     args = parser.parse_args(argv)
 
     t0 = time.perf_counter()
@@ -101,12 +107,25 @@ def main(argv: list[str] | None = None) -> int:
 
     ana_client = AnaHidrowebClient(cache_dir=DATA_RAW / "wave2a")
     ana_res = ana_client.fetch_or_fallback(
-        station_codes=("87450004", "86510000"), bacia_id="guaiba", allow_zenodo_fallback=True
+        station_codes=("87450004", "86510000"),
+        bacia_id="guaiba",
+        allow_zenodo_fallback=not args.require_live_ana,
     )
     print(
         f"[Onda 2B] ANA HidroWeb API v2 status: source={ana_res.source} "
         f"(credenciais={ana_client.has_credentials})"
     )
+    if args.require_live_ana and ana_res.source != "ana_hidroweb_v2":
+        raise SourceUnavailableError(
+            "ANA API v2 exigida (--require-live-ana) mas a fonte efetiva foi "
+            f"'{ana_res.source}'. Verifique permissão do usuário no módulo HidroWebService."
+        )
+    ana_provenance = {
+        "source": ana_res.source,
+        "has_credentials": ana_client.has_credentials,
+        "station_codes": list(ana_res.station_codes),
+        "weekly_rows": None if ana_res.weekly_df is None else ana_res.weekly_df.height,
+    }
 
     # 2. Carrega grade diária 0.1° ERA5-Land + V10M NASA (<= 2024) + alvos semanais v3
     panel_v3 = pl.read_parquet(DATA_PROCESSED / "rs_painel_semanal_regioes_v3.parquet").filter(
@@ -322,6 +341,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ablation_summary = {
         "daily_seq_len": args.seq_len,
+        "ana_provenance": ana_provenance,
         "daily_report": rep_daily.__dict__,
         "daily_2024": {"roc_auc": roc_d, "pr_auc": pr_d, "ece": ece_d, "bss": bss_d},
         "weekly_2024": weekly_metrics,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -245,3 +246,72 @@ def test_generate_neural_hydro_oof_daily_mode_aligns_to_weekly_keys() -> None:
     assert "prob_enchente_f03_oof" in oof_wk.columns
     # Saída alinhada à granularidade semanal (~2 entidades x ~208 semanas)
     assert oof_wk.height == daily_df.filter(pl.col("is_week_end")).height
+
+
+class _FakeOAuthResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self) -> _FakeOAuthResponse:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+
+def test_ana_hidroweb_uses_documented_routes_and_query_params(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Trava o contrato da API v2: rota `OAUth/v1`, headers e query do manual oficial."""
+    monkeypatch.setenv("ANA_HIDROWEB_USER", "identificador-teste")
+    monkeypatch.setenv("ANA_HIDROWEB_PASSWORD", "senha-teste")
+
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    def _fake_urlopen(req: Any, timeout: float = 30.0) -> _FakeOAuthResponse:
+        del timeout
+        url = str(req.full_url)
+        headers = {str(k).lower(): str(v) for k, v in req.header_items()}
+        captured.append((url, headers))
+        if "OAUth" in url:
+            return _FakeOAuthResponse(
+                json.dumps({"items": {"tokenautenticacao": "token-abc"}}).encode()
+            )
+        return _FakeOAuthResponse(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "Data_Hora_Medicao": "2024-05-03 12:00:00.0",
+                            "Cota_Adotada": "460.00",
+                            "Vazao_Adotada": "28000.00",
+                        }
+                    ]
+                }
+            ).encode()
+        )
+
+    monkeypatch.setattr(
+        "previsao_leitos.ingestion.wave2b_clients.urllib.request.urlopen", _fake_urlopen
+    )
+
+    client = AnaHidrowebClient(cache_dir=tmp_path)
+    res = client.fetch_or_fallback(station_codes=("87450004",), allow_zenodo_fallback=False)
+    assert res.source == "ana_hidroweb_v2"
+
+    auth_url, auth_headers = captured[0]
+    assert auth_url == (
+        "https://www.ana.gov.br/hidrowebservice/EstacoesTelemetricas/OAUth/v1"
+    )
+    assert auth_headers["identificador"] == "identificador-teste"
+    assert auth_headers["senha"] == "senha-teste"
+
+    series_url, series_headers = captured[1]
+    assert "HidroinfoanaSerieTelemetricaAdotada/v1" in series_url
+    assert "CodigoDaEstacao=87450004" in series_url
+    assert "TipoFiltroData=DATA_LEITURA" in series_url
+    assert "RangeIntervaloDeBusca=DIAS_30" in series_url
+    assert series_headers["authorization"] == "Bearer token-abc"

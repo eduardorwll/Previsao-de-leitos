@@ -25,6 +25,21 @@ Eliminar a colisão de grade climática (`Gate G6 FAIL 5/30 = 16,7%`) migrando o
 - **Testes Unitários Offline (`tests/unit/test_v1_2_3_wave2b_and_daily_f03.py`):**
   - Cobertura de URL/cache SHA-256 `MERGE-CPTEC`, OAuth + fallback Zenodo `ANA`, guarda anti-lacuna diária (`step_days=1`) e geração OOF diária com retorno alinhado à grade semanal.
 
+### 2.1 Correção de Contrato da ANA API v2 (2026-11-25)
+
+Com as credenciais institucionais em mãos, a validação ao vivo expôs três divergências do cliente em relação ao manual oficial `HidroWebService`:
+
+| Item | Antes | Agora (manual oficial) |
+| :--- | :--- | :--- |
+| Rota de autenticação | `/EstacoesTelemetricas/OAuth/v1` (`HTTP 404`) | `/EstacoesTelemetricas/OAUth/v1` |
+| Código da estação | `Codigo_Estacao` | `CodigoDaEstacao` |
+| Filtro de data | `Tipo_Filtro_Data` | `TipoFiltroData` |
+| Janela | `Range_Intervalo` | `RangeIntervaloDeBusca` |
+
+O parser (`parse_telemetric_series_json`) já estava correto (`items`, `Data_Hora_Medicao`, `Cota_Adotada`, `Vazao_Adotada`) e foi mantido. Foi adicionado o teste de contrato `test_ana_hidroweb_uses_documented_routes_and_query_params` (sem rede) e a flag `--require-live-ana` na ablação diária, que impede o fallback Zenodo de mascarar falha de credencial e registra `ana_provenance` no JSON.
+
+> **Bloqueio operacional remanescente:** a autenticação responde `HTTP 401 — "Usuário sem permissão de acesso ao módulo. Verifique!"`. As credenciais trafegam corretamente (headers `Identificador`/`Senha` aceitos pela rota), mas o usuário ainda não possui permissão no módulo `HidroWebService` do lado da ANA. Enquanto isso, o pipeline segue usando o fallback aberto `Zenodo 16929471`, e a ablação diária continua classificada como `KEEP_WEEKLY_CHAMPION`.
+
 ---
 
 ## 3. Resultados Reais Auditados na RX 7600 (`RS 2024`, `rs_v1_2_3_wave2b_01deg_2024`)
