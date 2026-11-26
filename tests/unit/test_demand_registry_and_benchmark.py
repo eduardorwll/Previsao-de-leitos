@@ -254,3 +254,44 @@ def test_online_candidate_keeps_point_and_widens_intervals() -> None:
     width_base = (base["pred_p90"] - base["pred_p10"]).to_numpy()
     width_online = (online["pred_p90"] - online["pred_p10"]).to_numpy()
     assert not np.allclose(width_base, width_online)
+
+
+def test_rolling_backtest_ranks_by_fold_median() -> None:
+    from previsao_leitos.audit.backtest import run_rolling_backtest
+
+    panel = _synthetic_panel()
+    result = run_rolling_backtest(
+        panel,
+        target="uti_adulto",
+        eval_years=(2023, 2024),
+        candidates="persistencia,ridge_pooled,gbdt_v1",
+        n_boot=5,
+        seed=2,
+    )
+    assert result.summary.height == 3
+    assert set(result.summary["candidate"].to_list()) == {
+        "persistencia",
+        "ridge_pooled",
+        "gbdt_v1",
+    }
+    assert result.summary["mase_median"].is_finite().all()
+    assert result.summary["mase_median"].to_list() == sorted(
+        result.summary["mase_median"].to_list()
+    )
+    assert result.summary["n_folds"].to_list() == [2, 2, 2]
+    assert set(result.fold_metrics["eval_year"].unique().to_list()) == {2023, 2024}
+    for column in ("mase_macro", "peak_abs_weeks", "event_mae", "shape_corr"):
+        assert column in result.fold_metrics.columns
+
+
+def test_rolling_backtest_blocks_holdout_years() -> None:
+    from previsao_leitos.audit.backtest import run_rolling_backtest
+
+    with pytest.raises(DataContractError):
+        run_rolling_backtest(
+            _synthetic_panel(),
+            target="uti_adulto",
+            eval_years=(2025,),
+            candidates="persistencia",
+            n_boot=5,
+        )

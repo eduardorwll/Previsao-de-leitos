@@ -193,6 +193,7 @@ entradas e versões de ambiente.
 | :--- | :--- |
 | **[Mapa de Progresso](docs/PROGRESSO.md)** | Etapas, features e status com marcação de progresso |
 | **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Notas da release: benchmark, paralelismo e GPU |
+| **[Feature F17 — Régua de Backtest](docs/features/17-regua-backtest-origem-movel.md)** | 6 folds, ranking por mediana, nível × fase e métrica evento-condicional |
 | **[Feature F16 — Benchmark, CLI e Relatório](docs/features/16-benchmark-cli-e-relatorio.md)** | Comando único, métricas, elegibilidade e PDF |
 | **[Feature F15 — SHAP e Bayes Hierárquico](docs/features/15-explicabilidade-shap-bayes.md)** | Explicabilidade auditada e pooling `Região ⊂ Bacia` |
 | **[Feature F14 — Pareto NSGA-II e SimPy](docs/features/14-pareto-nsga2-simpy.md)** | Fronteira de contingência e otimização de filas |

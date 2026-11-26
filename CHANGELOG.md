@@ -27,6 +27,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 
 ## [Unreleased]
 
+### Added
+- **Régua de backtest de origem móvel (`Task 1.3.2`, Feature F17):** comando `previsao-leitos backtest` que avalia modelos em folds `2019–2024` (`train <= y-2`, calibração `y-1`), com ranking por **MASE mediano entre folds**, MASE macro robusto a regiões degeneradas, erro de pico com sinal, métrica evento-condicional e decomposição nível × fase; saída em CSV, figuras 300 DPI e PDF por alvo.
+
 ### Removed
 - **Aposentadoria do Protótipo Legado (`legacy/previsao_leitos_colab.py`):** Removido o script monolítico inicial em commit dedicado após atingimento de paridade modular (`domain`, `ingestion`, `geo`, `demand`, `readiness`, `audit`, `cli`), cobertura de testes `86,8%` ($\ge 80\%$) e pipeline RS 2024 auditado com zero vazamento (histórico preservado integralmente no Git).
 

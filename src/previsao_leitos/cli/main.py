@@ -666,6 +666,128 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_years(value: str) -> tuple[int, ...]:
+    """Aceita `2019-2024` ou `2019,2021,2024`."""
+    value = value.strip()
+    if "-" in value and "," not in value:
+        start, end = value.split("-", 1)
+        return tuple(range(int(start), int(end) + 1))
+    return tuple(int(part.strip()) for part in value.split(",") if part.strip())
+
+
+def _cmd_backtest(args: argparse.Namespace) -> int:
+    import json
+    import time
+    from datetime import UTC, datetime
+
+    from previsao_leitos.audit.backtest import run_rolling_backtest
+    from previsao_leitos.audit.backtest_report import (
+        plot_backtest_ranking,
+        plot_error_decomposition,
+        render_backtest_report,
+        sha256_of,
+    )
+    from previsao_leitos.audit.benchmark_report import mirror_to_downloads
+    from previsao_leitos.demand.modeling import resolve_targets
+    from previsao_leitos.demand.registry import resolve_selection
+
+    panel_path = Path(args.panel_path)
+    if not panel_path.exists():
+        print(f"[erro] painel de modelagem ausente: {panel_path}")
+        return 2
+
+    start = time.perf_counter()
+    panel = pl.read_parquet(panel_path)
+    run_id = args.run_id or (
+        f"rs_backtest_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+    )
+    run_dir = Path(args.output_dir) / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    excluded = {name.strip() for name in args.exclude.split(",") if name.strip()}
+    selected = [spec.name for spec in resolve_selection(args.models) if spec.name not in excluded]
+    years = _parse_years(args.folds)
+    targets = resolve_targets(args.target)
+
+    fold_frames: list[pl.DataFrame] = []
+    summary_frames: list[pl.DataFrame] = []
+    for spec in targets:
+        result = run_rolling_backtest(
+            panel,
+            target=spec.key,
+            eval_years=years,
+            candidates=selected,
+            n_boot=args.n_boot,
+            seed=args.seed,
+            run_id=run_id,
+        )
+        fold_frames.append(result.fold_metrics.with_columns(pl.lit(spec.key).alias("target")))
+        summary_frames.append(result.summary.with_columns(pl.lit(spec.key).alias("target")))
+        target_dir = run_dir / spec.key if len(targets) > 1 else run_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        if target_dir != run_dir:
+            result.fold_metrics.write_csv(target_dir / "backtest_folds.csv")
+            result.summary.write_csv(target_dir / "backtest_summary.csv")
+        plot_backtest_ranking(
+            result.fold_metrics,
+            result.summary,
+            output_path=target_dir / "fig_backtest_mase.png",
+            target_label=spec.label,
+        )
+        plot_error_decomposition(
+            result.summary,
+            output_path=target_dir / "fig_error_decomposition.png",
+            target_label=spec.label,
+        )
+
+    folds_all = pl.concat(fold_frames, how="diagonal_relaxed")
+    summary_all = pl.concat(summary_frames, how="diagonal_relaxed")
+    folds_all.write_csv(run_dir / "backtest_folds.csv")
+    summary_all.write_csv(run_dir / "backtest_summary.csv")
+
+    manifest = {
+        "run_id": run_id,
+        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "git_sha": _git_sha(),
+        "kind": "rolling_origin_backtest",
+        "targets": [spec.key for spec in targets],
+        "folds": list(years),
+        "models": selected,
+        "excluded": sorted(excluded),
+        "seed": args.seed,
+        "n_boot": args.n_boot,
+        "panel_path": str(panel_path),
+        "panel_sha256": sha256_of(panel_path),
+        "elapsed_seconds": round(time.perf_counter() - start, 2),
+        "holdout_policy": "folds <= 2024; 2025/2026 reservados ao M2",
+        "disclaimer": "Not for patient care or live clinical use",
+    }
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    print(
+        f"[backtest] run={run_id} | alvos={len(targets)} | folds={years[0]}-{years[-1]} | "
+        f"modelos={len(selected)} | {manifest['elapsed_seconds']}s | saida={run_dir}"
+    )
+    best = summary_all.sort("mase_median").head(6)
+    print(best)
+
+    if not args.no_report:
+        for spec in targets:
+            target_dir = run_dir / spec.key if len(targets) > 1 else run_dir
+            _, pdf_path = render_backtest_report(
+                target_dir,
+                target_label=spec.label,
+                eval_years=years,
+                pdf_name=f"relatorio_backtest_{spec.key}.pdf",
+            )
+            print(f"[backtest] PDF: {pdf_path}")
+            if not args.no_mirror_downloads:
+                print(f"[backtest] espelho: {mirror_to_downloads(pdf_path)}")
+    return 0
+
+
 def _cmd_report(args: argparse.Namespace) -> int:
     from previsao_leitos.audit.benchmark_report import (
         build_figures,
@@ -761,6 +883,31 @@ def build_parser() -> argparse.ArgumentParser:
         p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
         p_bench.add_argument("--allow-holdout", action="store_true", default=False)
 
+    p_bt = sub.add_parser(
+        "backtest",
+        help="Roda a régua de origem móvel (múltiplos folds) e emite o diagnóstico.",
+    )
+    p_bt.add_argument("--target", type=str, default="uti_adulto")
+    p_bt.add_argument("--folds", type=str, default="2019-2024")
+    p_bt.add_argument("--models", type=str, default="all")
+    p_bt.add_argument(
+        "--exclude",
+        type=str,
+        default="hierarchical_bayes",
+        help="Modelos a excluir (lista separada por vírgula); bayes é caro por fold.",
+    )
+    p_bt.add_argument(
+        "--panel-path",
+        type=str,
+        default="data/processed/rs_modeling_panel_v3.parquet",
+    )
+    p_bt.add_argument("--output-dir", type=str, default="reports/runs")
+    p_bt.add_argument("--run-id", type=str, default="")
+    p_bt.add_argument("--seed", type=int, default=42)
+    p_bt.add_argument("--n-boot", type=int, default=50)
+    p_bt.add_argument("--no-report", action="store_true", default=False)
+    p_bt.add_argument("--no-mirror-downloads", action="store_true", default=False)
+
     p_report = sub.add_parser("report", help="Regera o PDF editorial a partir de um run existente.")
     p_report.add_argument("--run-id", type=str, required=True)
     p_report.add_argument("--output-dir", type=str, default="reports/runs")
@@ -797,6 +944,8 @@ def cli_main(argv: Sequence[str] | None = None) -> int:
         return _cmd_verify_rs(args)
     if args.command in ("benchmark", "run"):
         return _cmd_benchmark(args)
+    if args.command == "backtest":
+        return _cmd_backtest(args)
     if args.command == "report":
         return _cmd_report(args)
     return 1

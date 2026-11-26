@@ -31,6 +31,17 @@ from previsao_leitos.demand.modeling import TARGET_SPECS
 
 _DISCLAIMER = "Not for patient care or live clinical use"
 
+__all__ = [
+    "_CSS",
+    "_figure",
+    "_render_pdf_via_chromium",
+    "_table",
+    "build_figures",
+    "mirror_to_downloads",
+    "render_report",
+    "sha256_of",
+]
+
 _CSS = """
 :root{--ink:#111827;--muted:#475569;--line:#cbd5e1;--bg:#ffffff;--accent:#0f766e}
 *{box-sizing:border-box}
