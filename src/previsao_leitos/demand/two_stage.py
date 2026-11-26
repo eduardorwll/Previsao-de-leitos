@@ -12,6 +12,7 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
@@ -70,6 +71,32 @@ _DEFAULT_MONO_POS: tuple[str, ...] = (
 )
 
 _DEFAULT_MONO_NEG: tuple[str, ...] = ("frac_floresta",)
+
+
+@dataclass(frozen=True)
+class TwoStageComponents:
+    """Decomposição algébrica auditável do ponto F04.1.
+
+    `point_beds = (basal_rate + shock_rate) * capacity` reproduz exatamente a predição
+    pontual (P50) do modelo; a separação permite auditar SHAP por estágio sem recomputar
+    a álgebra fora do modelo.
+    """
+
+    capacity: np.ndarray
+    basal_rate: np.ndarray
+    shock_rate: np.ndarray
+    shock_matrix: np.ndarray
+    shock_cols: tuple[str, ...]
+
+    @property
+    def point_rate(self) -> np.ndarray:
+        """Taxa de ocupação relativa prevista (basal + choque), antes do reescalonamento."""
+        return np.asarray(self.basal_rate + self.shock_rate, dtype=np.float64)
+
+    @property
+    def point_beds(self) -> np.ndarray:
+        """Ponto em leitos ocupados/dia (unidade original da F04.1)."""
+        return np.asarray(self.point_rate * self.capacity, dtype=np.float64)
 
 
 class OrthogonalTwoStageOccupancyForecaster:
@@ -136,6 +163,13 @@ class OrthogonalTwoStageOccupancyForecaster:
     def shock_cols(self) -> tuple[str, ...]:
         """Colunas efetivamente selecionadas para o Estágio 2 (choque ex-ante)."""
         return self._shock_cols
+
+    @property
+    def shock_estimator(self) -> HistGradientBoostingRegressor:
+        """Estimador monotônico do Estágio 2 já ajustado (somente leitura para auditoria)."""
+        if self._shock_model is None:
+            raise DataContractError("OrthogonalTwoStageOccupancyForecaster não foi ajustado.")
+        return self._shock_model
 
     @property
     def monotone_constraints(self) -> dict[str, int]:
@@ -291,8 +325,12 @@ class OrthogonalTwoStageOccupancyForecaster:
         self._fitted = True
         return self
 
-    def predict_quantiles(self, df: pl.DataFrame) -> pl.DataFrame:
-        """Prevê quantis P10/P50/P90/P95 heterocedásticos re-escalados para unidade original."""
+    def predict_stage_components(self, df: pl.DataFrame) -> TwoStageComponents:
+        """Decompõe a predição pontual em Estágio 1 (basal) e Estágio 2 (choque).
+
+        Os componentes retornados são exatamente os usados por `predict_quantiles`:
+        `point_beds` reproduz o P50 sem qualquer reajuste.
+        """
         if not self._fitted or self._shock_model is None:
             raise DataContractError("OrthogonalTwoStageOccupancyForecaster não foi ajustado.")
 
@@ -315,9 +353,19 @@ class OrthogonalTwoStageOccupancyForecaster:
             neginf=0.0,
         )
         shock_hat = np.asarray(self._shock_model.predict(x_shock), dtype=np.float64)
+        return TwoStageComponents(
+            capacity=cap,
+            basal_rate=basal_hat,
+            shock_rate=shock_hat,
+            shock_matrix=x_shock,
+            shock_cols=self._shock_cols,
+        )
 
-        loc_count = (basal_hat + shock_hat) * cap
-        scale = self._heteroscedastic_scale(cap)
+    def predict_quantiles(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Prevê quantis P10/P50/P90/P95 heterocedásticos re-escalados para unidade original."""
+        comp = self.predict_stage_components(df)
+        loc_count = comp.point_beds
+        scale = self._heteroscedastic_scale(comp.capacity)
 
         return _enforce_non_crossing_non_negative(
             loc_count + scale * self._scale_quantiles[0.10],
