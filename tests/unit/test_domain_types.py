@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
+
 import pytest
 
 import previsao_leitos
@@ -16,7 +19,9 @@ from previsao_leitos.domain import (
 
 
 def test_package_imports_without_env_vars_or_side_effects() -> None:
-    assert previsao_leitos.__version__ == "0.1.0"
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    assert previsao_leitos.__version__ == declared
 
 
 def test_parse_codigo_cnes_preserves_leading_zeros() -> None:

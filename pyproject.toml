@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "previsao-de-leitos"
-version = "0.1.0"
+version = "1.3.0"
 description = "Pesquisa aberta para previsão ex-ante de leitos necessários em hospitais-escola sob risco de enchentes (RS -> Brasil)."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

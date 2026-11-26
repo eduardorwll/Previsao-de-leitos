@@ -2,6 +2,29 @@
 
 Histórico de mudanças orientado ao impacto para pesquisadores e mantenedores ([Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)).
 
+## [1.3.0] — 2026-11-26
+
+Primeira release executável: um comando roda 13 modelos em 4 alvos, compara leitos
+observados e preditos e emite relatório editorial. Notas completas em
+[docs/RELEASES/v1.3.0.md](docs/RELEASES/v1.3.0.md).
+
+### Added
+- CLI `benchmark`/`run`/`report` com splits causais por alvo, catraca, elegibilidade e PDF.
+- Painel de modelagem persistido (`rs_modeling_panel_v3.parquet`, anos `<= 2024`).
+- 13 candidatos no registry, incluindo conformais online (`gbdt_agaci`, `gbdt_spci`).
+- Figuras por região (30 painéis), contexto histórico e seção de elegibilidade no relatório.
+- `CITATION.cff` e `LICENSE` (MIT).
+
+### Changed
+- Execução paralela por alvo (`--jobs`): `1.141 s → 434 s`.
+- Backend bayesiano plugável (`--sampler nutpie|numpyro`, `--device auto|cpu|gpu`).
+- `verify-rs` passa a usar o painel `v3`.
+
+### Fixed
+- Inclinação do choque no modelo bayesiano com `HalfNormal` (conformidade com `ADR-0001`).
+- Rotas e parâmetros do cliente ANA HidroWeb (`OAUth/v1`, `CodigoDaEstacao`, `TipoFiltroData`,
+  `RangeIntervaloDeBusca`).
+
 ## [Unreleased]
 
 ### Removed

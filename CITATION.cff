@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "Se este material apoiar sua pesquisa, cite esta release."
+title: "Previsão de Leitos Hospitalares sob Risco de Enchentes"
+abstract: >-
+  Pesquisa aberta para previsão ex-ante de necessidade de leitos hospitalares
+  (demanda, ocupação e surge capacity) em hospitais-escola sob risco de enchentes,
+  com foco no Rio Grande do Sul (V1) e expansão planejada para o Brasil (V2).
+  Inclui ingestão com LGPD, hidrologia calibrada, modelos probabilísticos de
+  demanda, simulação de filas, auditoria contrafactual, explicabilidade auditada
+  e um benchmark multi-modelo executável por linha de comando.
+version: "1.3.0"
+date-released: "2026-11-26"
+license: MIT
+url: "https://github.com/GuilhermeSPedroso07/Previsao-de-leitos"
+repository-code: "https://github.com/GuilhermeSPedroso07/Previsao-de-leitos"
+keywords:
+  - hospital beds
+  - flood risk
+  - demand forecasting
+  - conformal prediction
+  - hierarchical Bayes
+  - public health
+  - Rio Grande do Sul
+  - Brazil
+authors:
+  - name: "Equipe Previsão de Leitos"
+    affiliation: "Projeto de pesquisa aberta"
