@@ -59,7 +59,7 @@ O projeto permanece 100% executável localmente na workstation Arch Linux, mas m
 - [x] **1.2.2** Ingestão Ao Vivo Onda 2A + extras `cpu`/`rocm`/`cuda` + `F03.1` semanal real em GPU ([11-onda2a-rocm-f03-oof-real.md](11-onda2a-rocm-f03-oof-real.md))
 - [x] **1.2.3** Ingestão Ao Vivo Onda 2B (`MERGE 0,1°` + `ANA API v2`), grade `0,1°` anti-G6 e ablação diária `F03.1` ([12-onda2b-grade-01deg-f03-diaria.md](12-onda2b-grade-01deg-f03-diaria.md))
 - [x] **1.2.4** Calibração de surtos (`MonotonicSurgeClassifier` + `RollingPlatt`/`Beta`, `BSS_pos +0,2370`, `BSS_shock +0,0097`) + `AgACI` vs. `SPCI` ([13-calibracao-surtos-agaci-spci.md](13-calibracao-surtos-agaci-spci.md))
-- [ ] **1.2.5** Otimização `_capacity_blocker` + Pareto `pymoo` NSGA-II (`SimPy` CRN 2 estágios)
+- [x] **1.2.5** Otimização `_capacity_blocker` (`2,04×`) + Pareto `pymoo` NSGA-II (`SimPy` CRN 2 estágios, POA `-65%` eletivas) ([14-pareto-nsga2-simpy.md](14-pareto-nsga2-simpy.md))
 - [ ] **1.2.6** `SHAP 0.54.1` (2 estágios) + experimento `PyMC 6.3.2` + `nutpie` + `ArviZ 1.3.0`
 - [ ] **M1** Emissão do Dossiê Master `V1.2 RS` (PDF Editorial #1)
 - [ ] **M2 (`1.3.0`)** Auditoria Final Única no Holdout (`2025` + `2026` virgem com `ChainLadderNowcaster`) + PDF Editorial #2

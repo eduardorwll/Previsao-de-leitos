@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -26,6 +26,8 @@ class HospitalReadinessConfig:
     elective_deferral_frac: float = 0.75
     surge_lead_time_days: int = 2
     polder_hospital_loss_frac: float = 0.0
+    trigger_occ_threshold: float = 0.90
+    hysteresis_close_threshold: float = 0.85
     region_label: str = "Região Hospitalar RS"
 
     def __post_init__(self) -> None:
@@ -52,6 +54,15 @@ class HospitalReadinessConfig:
             raise DataContractError(
                 f"polder_hospital_loss_frac fora de [0, 0.8): {self.polder_hospital_loss_frac}"
             )
+        if not (0.50 <= self.trigger_occ_threshold <= 1.25):
+            raise DataContractError(
+                f"trigger_occ_threshold fora de [0.50, 1.25]: {self.trigger_occ_threshold}"
+            )
+        if not (0.40 <= self.hysteresis_close_threshold <= 1.10):
+            raise DataContractError(
+                f"hysteresis_close_threshold fora de [0.40, 1.10]: "
+                f"{self.hysteresis_close_threshold}"
+            )
 
 
 @dataclass(frozen=True)
@@ -64,6 +75,17 @@ class PolicySimulationResult:
     overload_days_gt95: int
     mean_wait_hours: float
     deferred_electives: int
+    surge_bed_days_active: int = 0
+
+
+@dataclass(frozen=True)
+class CrnScenarioStream:
+    """Fluxo estocástico pré-gerado (Common Random Numbers) para avaliação justa de políticas."""
+
+    seed: int
+    daily_arrivals_urgent: tuple[int, ...]
+    daily_arrivals_elective: tuple[int, ...]
+    daily_los_samples: tuple[tuple[float, ...], ...]
 
 
 @dataclass(frozen=True)
@@ -111,41 +133,56 @@ def _run_single_simpy_policy(
     weekly_schedule: pl.DataFrame,
     config: HospitalReadinessConfig,
     policy_mode: PolicyMode,
-    daily_arrivals_urgent: list[int],
-    daily_arrivals_elective: list[int],
-    daily_los_samples: list[list[float]],
+    daily_arrivals_urgent: Sequence[int],
+    daily_arrivals_elective: Sequence[int],
+    daily_los_samples: Sequence[Sequence[float]],
     flood_indicator_col: str | None = "em_cheia_hidro",
+    flood_days_precomputed: set[int] | None = None,
+    pred_p90_weekly_precomputed: Sequence[float] | None = None,
 ) -> PolicySimulationResult:
-    """Executa simulação de eventos discretos em `simpy.Environment` com stream compartilhado."""
+    """Executa simulação de eventos discretos em `simpy.Environment` com stream compartilhado.
+
+    Usa bloqueadores persistentes diferenciais (`_persistent_capacity_blocker`), criando ou
+    liberando tokens no `PriorityResource` somente quando a capacidade indisponível muda entre
+    dias consecutivos (evitando recriar milhares de processos SimPy por replicação).
+    """
     n_weeks = weekly_schedule.height
     n_days = n_weeks * 7
-    pred_p90_weekly = weekly_schedule["previsao_p90_semanal"].to_list()
+    pred_p90_weekly = (
+        pred_p90_weekly_precomputed
+        if pred_p90_weekly_precomputed is not None
+        else weekly_schedule["previsao_p90_semanal"].to_list()
+    )
 
     # Capacidade máxima no recurso SimPy = base + surge; leitos indisponíveis são bloqueados
     max_capacity = config.base_beds + config.surge_beds
     env = simpy.Environment()
     beds = simpy.PriorityResource(env, capacity=max_capacity)
 
-    # Controle de tokens de bloqueio para modelar surge lead-time e perda em área aterrada/pôlder
+    # Controle de tokens de bloqueio persistentes (delta diferencial por dia)
     surge_active = False
     surge_requested_day: int | None = None
     polder_loss_beds = round(config.base_beds * config.polder_hospital_loss_frac)
+    active_blockers: list[simpy.Event] = []
 
     # Dias de cheia hidrológica exógena (ativa perda em pôlder sem proxy circular de demanda)
-    flood_days = _resolve_exogenous_flood_days(
-        weekly_schedule,
-        flood_indicator_col=flood_indicator_col,
+    flood_days = (
+        flood_days_precomputed
+        if flood_days_precomputed is not None
+        else _resolve_exogenous_flood_days(
+            weekly_schedule,
+            flood_indicator_col=flood_indicator_col,
+        )
     )
 
     wait_times_days: list[float] = []
     deferred_count = 0
+    surge_bed_days_active = 0
     in_bed_patients = 0
     waiting_patients = 0
     daily_records: list[dict[str, object]] = []
 
-    def _patient_process(
-        stay_days: float, priority: int
-    ) -> Generator[simpy.Event, Any, None]:
+    def _patient_process(stay_days: float, priority: int) -> Generator[simpy.Event, Any, None]:
         nonlocal in_bed_patients, waiting_patients
         arr_t = env.now
         waiting_patients += 1
@@ -157,15 +194,19 @@ def _run_single_simpy_policy(
             yield env.timeout(stay_days)
             in_bed_patients -= 1
 
-    def _capacity_blocker(duration: float) -> Generator[simpy.Event, Any, None]:
+    def _persistent_capacity_blocker(
+        release_evt: simpy.Event,
+    ) -> Generator[simpy.Event, Any, None]:
         with beds.request(priority=-10) as req:
             yield req
-            yield env.timeout(duration)
+            yield release_evt
 
     def _hospital_driver() -> Generator[simpy.Event, Any, None]:
-        nonlocal surge_active, surge_requested_day, deferred_count
+        nonlocal surge_active, surge_requested_day, deferred_count, surge_bed_days_active
         # Capacidade base semanal teórica (Lei de Little: base_beds * 7 / los_days)
         base_weekly_capacity = config.base_beds * 7.0 / config.los_days
+        trig_thr = config.trigger_occ_threshold
+        close_thr = config.hysteresis_close_threshold
 
         for day in range(n_days):
             wk_idx = day // 7
@@ -186,10 +227,10 @@ def _run_single_simpy_policy(
             # Política de acionamento de contingência com histerese segura sobre leitos BASE
             base_eff = max(1, config.base_beds - active_polder_loss)
             crisis_now = occ_now >= 0.95 or waiting_patients > 0
-            forecast_alert_now = pred_p90 >= 0.90 * base_weekly_capacity
-            forecast_alert_lead = pred_p90_lookahead >= 0.90 * base_weekly_capacity
+            forecast_alert_now = pred_p90 >= trig_thr * base_weekly_capacity
+            forecast_alert_lead = pred_p90_lookahead >= trig_thr * base_weekly_capacity
             forecast_alert = forecast_alert_now or forecast_alert_lead
-            below_base_safe = in_bed_patients < 0.85 * base_eff and waiting_patients == 0
+            below_base_safe = in_bed_patients < close_thr * base_eff and waiting_patients == 0
             if policy_mode == "proactive_h2":
                 trigger_on = forecast_alert or crisis_now
                 safe_to_close = (not forecast_alert) and below_base_safe
@@ -209,16 +250,28 @@ def _run_single_simpy_policy(
                 surge_active = False
                 surge_requested_day = None
 
+            if surge_active:
+                surge_bed_days_active += config.surge_beds
+
             # Recalcula capacidade efetiva de hoje já refletindo ativação/desativação de surge
             eff_beds = max(
                 1,
                 config.base_beds - active_polder_loss + (config.surge_beds if surge_active else 0),
             )
 
-            # Bloqueia leitos não-ativos durante o dia inteiro (surge inativo + perda por pôlder)
+            # Atualiza bloqueios de forma diferencial (apenas o delta de leitos bloqueados)
             blocked_today = (0 if surge_active else config.surge_beds) + active_polder_loss
-            for _ in range(blocked_today):
-                env.process(_capacity_blocker(1.0))
+            delta_block = blocked_today - len(active_blockers)
+            if delta_block > 0:
+                for _ in range(delta_block):
+                    rel = env.event()
+                    active_blockers.append(rel)
+                    env.process(_persistent_capacity_blocker(rel))
+            elif delta_block < 0:
+                for _ in range(-delta_block):
+                    rel = active_blockers.pop()
+                    if not rel.triggered:
+                        rel.succeed()
 
             # Chegadas urgentes (prioridade 1) + eletivas (prioridade 2, passíveis de adiamento)
             n_urg = daily_arrivals_urgent[day]
@@ -271,6 +324,75 @@ def _run_single_simpy_policy(
         overload_days_gt95=overload_days,
         mean_wait_hours=mean_wait_h,
         deferred_electives=deferred_count,
+        surge_bed_days_active=surge_bed_days_active,
+    )
+
+
+def generate_crn_scenarios(
+    weekly_schedule: pl.DataFrame,
+    config: HospitalReadinessConfig,
+    *,
+    seeds: Sequence[int],
+) -> tuple[CrnScenarioStream, ...]:
+    """Pré-gera replicações estocásticas idênticas (Common Random Numbers) para múltiplas seeds."""
+    required = ("chegadas_semanais", "previsao_p90_semanal")
+    missing = [c for c in required if c not in weekly_schedule.columns]
+    if missing:
+        raise DataContractError(f"Colunas ausentes em weekly_schedule: {missing}")
+    if weekly_schedule.is_empty():
+        raise DataContractError("weekly_schedule vazio em generate_crn_scenarios.")
+    if not seeds:
+        raise DataContractError("seeds não pode ser vazio em generate_crn_scenarios.")
+
+    arr_weekly = [max(0.0, float(x)) for x in weekly_schedule["chegadas_semanais"].to_list()]
+    streams: list[CrnScenarioStream] = []
+    for s in seeds:
+        rng = np.random.default_rng(int(s))
+        d_urg: list[int] = []
+        d_elec: list[int] = []
+        d_los: list[tuple[float, ...]] = []
+        for arr_w in arr_weekly:
+            daily_rate = arr_w / 7.0
+            for _ in range(7):
+                n_u = int(rng.poisson(daily_rate * (1.0 - config.elective_share)))
+                n_e = int(rng.poisson(daily_rate * config.elective_share))
+                d_urg.append(n_u)
+                d_elec.append(n_e)
+                n_tot = max(1, n_u + n_e)
+                samples = rng.gamma(shape=2.0, scale=config.los_days / 2.0, size=n_tot)
+                d_los.append(tuple(max(0.5, float(x)) for x in samples))
+        streams.append(
+            CrnScenarioStream(
+                seed=int(s),
+                daily_arrivals_urgent=tuple(d_urg),
+                daily_arrivals_elective=tuple(d_elec),
+                daily_los_samples=tuple(d_los),
+            )
+        )
+    return tuple(streams)
+
+
+def evaluate_policy_on_crn(
+    *,
+    weekly_schedule: pl.DataFrame,
+    config: HospitalReadinessConfig,
+    policy_mode: PolicyMode,
+    stream: CrnScenarioStream,
+    flood_indicator_col: str | None = "em_cheia_hidro",
+    flood_days_precomputed: set[int] | None = None,
+    pred_p90_weekly_precomputed: Sequence[float] | None = None,
+) -> PolicySimulationResult:
+    """Avalia uma política específica sobre um fluxo CRN já pré-gerado."""
+    return _run_single_simpy_policy(
+        weekly_schedule=weekly_schedule,
+        config=config,
+        policy_mode=policy_mode,
+        daily_arrivals_urgent=stream.daily_arrivals_urgent,
+        daily_arrivals_elective=stream.daily_arrivals_elective,
+        daily_los_samples=stream.daily_los_samples,
+        flood_indicator_col=flood_indicator_col,
+        flood_days_precomputed=flood_days_precomputed,
+        pred_p90_weekly_precomputed=pred_p90_weekly_precomputed,
     )
 
 

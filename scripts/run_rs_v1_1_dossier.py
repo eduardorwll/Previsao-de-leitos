@@ -282,12 +282,17 @@ def main() -> int:
     oof_neural_path = Path("data/processed/rs_f03_hydro_oof_v3.parquet")
     daily_ablation_path = Path("data/processed/rs_f03_ablation_daily_60d_vs_weekly.json")
     surge_ablation_path = Path("data/processed/rs_v1_2_4_surge_conformal_ablation.json")
+    pareto_path = Path("data/processed/rs_v1_2_5_pareto_contingency.json")
     panel_path = v3_path if v3_path.exists() else v2_path
     is_v3 = panel_path == v3_path
     has_real_oof = is_v3 and oof_neural_path.exists()
     has_wave2b = has_real_oof and daily_ablation_path.exists()
     has_surge_cal = has_wave2b and surge_ablation_path.exists()
-    if has_surge_cal:
+    has_pareto = has_surge_cal and pareto_path.exists()
+    if has_pareto:
+        run_id = "rs_v1_2_5_pareto_2024"
+        version_tag = "V1.2.5"
+    elif has_surge_cal:
         run_id = "rs_v1_2_4_surge_conformal_2024"
         version_tag = "V1.2.4"
     elif has_wave2b:
@@ -757,6 +762,32 @@ def main() -> int:
             (
                 "Ablação Conformal Normalizada por CNES (Flood vs. Mondrian vs. AgACI vs. SPCI)",
                 pl.DataFrame(ab_data["conformal_ablation"]),
+            )
+        )
+    if has_pareto:
+        p_data = json.loads(pareto_path.read_text(encoding="utf-8"))
+        pareto_rows = []
+        for reg in p_data["regions"]:
+            v1_b = reg["v1_fixed"]
+            rec = reg["recommended"]
+            pareto_rows.append(
+                {
+                    "regiao": reg["region"],
+                    "leitos_base": reg["base_beds"],
+                    "v1_pico_fila": v1_b["mean_peak_queue"],
+                    "v1_eletivas_adiadas": v1_b["mean_deferred_electives"],
+                    "pareto_pico_fila": rec["mean_peak_queue"],
+                    "pareto_eletivas_adiadas": rec["mean_deferred_electives"],
+                    "red_fila_vs_h0_pct": rec["queue_reduction_vs_reactive_pct"],
+                    "red_elet_vs_v1_pct": rec["elective_reduction_vs_v1_pct"],
+                    "red_surge_vs_v1_pct": rec["surge_cost_reduction_vs_v1_pct"],
+                    "domina_v1_3obj": rec["dominates_v1"],
+                }
+            )
+        extra_tables_list.append(
+            (
+                "Otimização Multiobjetivo Pareto NSGA-II (SimPy CRN 2 Estágios, R_audit=30)",
+                pl.DataFrame(pareto_rows),
             )
         )
 
