@@ -355,38 +355,16 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def _plot_models(metrics: pl.DataFrame, *, max_models: int = 2) -> list[str]:
-    """Escolhe campeão + melhor MASE para as figuras, sem poluir o gráfico."""
-    ok = metrics.filter(pl.col("status") == "ok")
-    if ok.height == 0:
-        return []
-    ordered = ok.sort("mase_vs_pers")
-    chosen: list[str] = []
-    champion = ok.filter(pl.col("is_champion"))
-    if champion.height:
-        chosen.append(str(champion["candidate"][0]))
-    for name in ordered["candidate"].to_list():
-        if name not in chosen:
-            chosen.append(str(name))
-        if len(chosen) >= max_models:
-            break
-    return chosen
-
-
 def _cmd_benchmark(args: argparse.Namespace) -> int:
     import json
     import time
     from datetime import UTC, datetime
 
     from previsao_leitos.audit.benchmark_report import (
+        build_figures,
         mirror_to_downloads,
         render_report,
         sha256_of,
-    )
-    from previsao_leitos.audit.comparison_plots import (
-        plot_calibration,
-        plot_observed_vs_predicted,
-        plot_residuals_by_region,
     )
     from previsao_leitos.audit.model_benchmark import run_benchmark
     from previsao_leitos.demand.modeling import make_modeling_splits, resolve_targets
@@ -453,28 +431,6 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
             )
         notes.extend(f"{spec.key}: {note}" for note in result.notes)
 
-        ok = result.metrics.filter(pl.col("status") == "ok")
-        plot_models = _plot_models(ok)
-        if plot_models:
-            plot_observed_vs_predicted(
-                result.predictions,
-                models=plot_models,
-                output_path=run_dir / f"fig_observed_vs_predicted_{spec.key}.png",
-                target_label=spec.label,
-                eval_year=args.eval_year,
-            )
-            if result.comparison.height:
-                plot_residuals_by_region(
-                    result.comparison,
-                    models=plot_models,
-                    output_path=run_dir / f"fig_residuals_{spec.key}.png",
-                    target_label=spec.label,
-                )
-            plot_calibration(
-                ok,
-                output_path=run_dir / f"fig_calibration_{spec.key}.png",
-                target_label=spec.label,
-            )
 
     metrics_all = pl.concat(metrics_frames, how="diagonal_relaxed")
     predictions_all = pl.concat(prediction_frames, how="diagonal_relaxed")
@@ -512,6 +468,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     (run_dir / "run_manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    build_figures(run_dir, target_labels={spec.key: spec.label for spec in targets})
 
     print(
         f"[benchmark] run={run_id} | alvos={len(targets)} | "
@@ -541,7 +498,11 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
-    from previsao_leitos.audit.benchmark_report import mirror_to_downloads, render_report
+    from previsao_leitos.audit.benchmark_report import (
+        build_figures,
+        mirror_to_downloads,
+        render_report,
+    )
     from previsao_leitos.demand.modeling import TARGET_SPECS
 
     run_dir = Path(args.output_dir) / args.run_id
@@ -550,11 +511,13 @@ def _cmd_report(args: argparse.Namespace) -> int:
         print(f"[erro] benchmark.csv ausente em {run_dir}")
         return 2
     metrics = pl.read_csv(metrics_path)
-    targets = [t for t in metrics["target"].unique().to_list() if t in TARGET_SPECS]
+    available = set(metrics["target"].unique().to_list())
+    targets = [key for key in TARGET_SPECS if key in available]
     if not targets:
         print("[erro] nenhum alvo reconhecido em benchmark.csv")
         return 2
     models = sorted({str(m) for m in metrics["candidate"].unique().to_list()})
+    build_figures(run_dir, target_labels={t: TARGET_SPECS[t].label for t in targets})
     _, pdf_path = render_report(
         run_dir,
         target_labels={t: TARGET_SPECS[t].label for t in targets},

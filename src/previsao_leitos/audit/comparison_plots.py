@@ -18,6 +18,8 @@ import polars as pl
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
 
 _COLOR_REAL = "#000000"
 _COLOR_CHAMPION = "#D55E00"
@@ -190,6 +192,147 @@ def plot_calibration(
         0.01,
         0.01,
         "Pesquisa aberta — Not for patient care or live clinical use | LGPD n < 5",
+        fontsize=7,
+        color="#475569",
+    )
+    return _atomic_save(fig, output_path)
+
+
+def plot_region_grid(
+    predictions: pl.DataFrame,
+    *,
+    models: Sequence[str],
+    output_path: Path,
+    target_label: str,
+    eval_year: int,
+    max_regions: int = 30,
+) -> Path:
+    """Small multiples: série real vs. P50 dos modelos, uma região por painel."""
+    if predictions.height == 0 or not models:
+        raise ValueError("plot_region_grid exige previsões e ao menos um modelo.")
+    champion = models[0]
+    regions = sorted(predictions["entity"].unique().to_list())[:max_regions]
+    n_cols = 5
+    n_rows = max(1, (len(regions) + n_cols - 1) // n_cols)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3.1 * n_cols, 2.15 * n_rows))
+    axes_flat = np.atleast_1d(axes).ravel()
+    palette = (_COLOR_CHAMPION, _COLOR_A, _COLOR_B)
+
+    for ax, region in zip(axes_flat, regions, strict=False):
+        subset = predictions.filter(pl.col("entity") == region)
+        reference = subset.filter(pl.col("model") == champion).sort("target_week")
+        weeks = reference["target_week"].to_numpy()
+        ax.plot(weeks, reference["observed"].to_numpy(), color=_COLOR_REAL, linewidth=1.6)
+        ax.fill_between(
+            weeks,
+            reference["pred_p10"].to_numpy(),
+            reference["pred_p90"].to_numpy(),
+            color=_COLOR_CHAMPION,
+            alpha=0.16,
+            linewidth=0,
+        )
+        for index, model in enumerate(models):
+            rows = subset.filter(pl.col("model") == model).sort("target_week")
+            ax.plot(
+                rows["target_week"].to_numpy(),
+                rows["pred_p50"].to_numpy(),
+                color=palette[index % len(palette)],
+                linewidth=1.2,
+                linestyle="-" if index == 0 else "--",
+            )
+        ax.set_title(region[:24], fontsize=6.2, pad=2)
+        ax.tick_params(labelsize=5.2, length=2)
+        ax.grid(alpha=0.2, linewidth=0.4)
+
+    for ax in axes_flat[len(regions) :]:
+        ax.axis("off")
+
+    handles: list[Any] = [
+        Line2D([], [], color=_COLOR_REAL, linewidth=1.6, label="Observado"),
+        Line2D(
+            [], [], color=palette[0], linewidth=1.2, label=f"P50 {champion}"
+        ),
+    ]
+    if len(models) > 1:
+        handles.append(
+            Line2D(
+                [], [], color=palette[1], linewidth=1.2, linestyle="--", label=f"P50 {models[1]}"
+            )
+        )
+    handles.append(
+        Rectangle((0, 0), 1, 1, color=_COLOR_CHAMPION, alpha=0.16, label="P10-P90")
+    )
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=8)
+    fig.suptitle(
+        f"{target_label} — leitos observados vs. preditos por região de saúde ({eval_year})",
+        fontsize=12,
+        x=0.01,
+        ha="left",
+    )
+    fig.tight_layout(rect=(0, 0.03, 1, 0.97))
+    fig.text(
+        0.01,
+        0.005,
+        "Pesquisa aberta — Not for patient care or live clinical use | LGPD n < 5",
+        fontsize=6.5,
+        color="#475569",
+    )
+    return _atomic_save(fig, output_path)
+
+
+def plot_observed_history(
+    panel: pl.DataFrame,
+    *,
+    target_column: str,
+    entity_col: str,
+    target_label: str,
+    eval_year: int,
+    output_path: Path,
+) -> Path:
+    """Contexto histórico: total regional observado por semana, com o ano de avaliação sombreado."""
+    frame = (
+        panel.select(
+            [
+                pl.col("ano_epi"),
+                pl.col("semana_epi"),
+                pl.col(target_column).alias("value"),
+            ]
+        )
+        .group_by(["ano_epi", "semana_epi"])
+        .agg(pl.col("value").sum())
+        .sort(["ano_epi", "semana_epi"])
+    )
+    if frame.height == 0:
+        raise ValueError("plot_observed_history sem dados.")
+    x = np.arange(frame.height)
+    years = frame["ano_epi"].to_numpy()
+    fig, ax = plt.subplots(figsize=(11, 3.6))
+    ax.plot(x, frame["value"].to_numpy(), color=_COLOR_REAL, linewidth=1.1)
+    eval_mask = years == eval_year
+    if eval_mask.any():
+        ax.axvspan(
+            float(x[eval_mask][0]),
+            float(x[eval_mask][-1]),
+            color=_COLOR_CHAMPION,
+            alpha=0.14,
+            linewidth=0,
+            label=f"Ano de avaliação ({eval_year})",
+        )
+    tick_positions = [int(np.argmax(years == y)) for y in sorted(set(years.tolist()))]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels([str(y) for y in sorted(set(years.tolist()))], fontsize=7, rotation=60)
+    ax.set_ylabel("Total regional por semana")
+    ax.set_title(
+        f"{target_label} — série observada completa (contexto do período avaliado)",
+        fontsize=11,
+        loc="left",
+    )
+    ax.grid(alpha=0.25, linewidth=0.6)
+    ax.legend(frameon=False, fontsize=8)
+    fig.text(
+        0.01,
+        0.01,
+        f"Pesquisa aberta — Not for patient care or live clinical use | LGPD n < 5 · {entity_col}",
         fontsize=7,
         color="#475569",
     )

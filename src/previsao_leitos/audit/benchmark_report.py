@@ -9,15 +9,25 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import html
 import json
 import shutil
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 
+from previsao_leitos.audit.comparison_plots import (
+    plot_calibration,
+    plot_observed_history,
+    plot_observed_vs_predicted,
+    plot_region_grid,
+    plot_residuals_by_region,
+)
 from previsao_leitos.audit.dossier_compiler import _render_pdf_via_chromium
+from previsao_leitos.demand.modeling import TARGET_SPECS
 
 _DISCLAIMER = "Not for patient care or live clinical use"
 
@@ -33,9 +43,9 @@ p,li{font-size:9.6pt}
 .meta{color:var(--muted);font-size:8.6pt;margin-bottom:14px}
 .badge{display:inline-block;border:1px solid var(--accent);color:var(--accent);
  border-radius:3px;padding:1px 6px;font-size:8pt;margin-right:6px}
-table{border-collapse:collapse;width:100%;margin:8px 0 14px;font-size:7.6pt}
-th,td{border-bottom:1px solid var(--line);padding:3px 4px;text-align:right}
-th:first-child,td:first-child{text-align:left}
+table{border-collapse:collapse;width:100%;margin:8px 0 12px;font-size:7.2pt;table-layout:fixed}
+th,td{border-bottom:1px solid var(--line);padding:3px 4px;text-align:right;overflow-wrap:anywhere}
+th:first-child,td:first-child{text-align:left;width:24%;overflow-wrap:normal}
 thead th{background:#f1f5f9;font-weight:700}
 tr.highlight td{background:#ecfdf5;font-weight:700}
 figure{margin:12px 0 18px;page-break-inside:avoid}
@@ -62,8 +72,25 @@ def _fmt(value: object, digits: int = 3) -> str:
     return html.escape(str(value))
 
 
+_HEADER_LABELS = {
+    "candidate": "Modelo",
+    "status": "Status",
+    "mae_p50": "MAE P50",
+    "mase_vs_pers": "MASE",
+    "pinball_p95": "Pinball P95",
+    "cobertura_p10_p90": "Cob. P10-90",
+    "peak_timing_error_weeks": "Erro pico (sem.)",
+    "monotonic_violations": "Viol. mono.",
+    "champion": "Campeão",
+    "decision": "Decisão",
+    "summary": "Resumo",
+}
+
+
 def _table(df: pl.DataFrame, columns: list[str], *, highlight_column: str | None = None) -> str:
-    headers = "".join(f"<th>{html.escape(col)}</th>" for col in columns)
+    headers = "".join(
+        f"<th>{html.escape(_HEADER_LABELS.get(col, col))}</th>" for col in columns
+    )
     rows: list[str] = []
     for row in df.select(columns).iter_rows(named=True):
         css = ""
@@ -83,7 +110,107 @@ def _figure(path: Path, caption: str) -> str:
     )
 
 
-def _target_sections(run_dir: Path, metrics: pl.DataFrame, target: str, label: str) -> str:
+def _select_plot_models(metrics: pl.DataFrame, *, max_models: int = 2) -> list[str]:
+    """Campeão registrado + melhor MASE (evita poluir os gráficos)."""
+    ok = metrics.filter(pl.col("status") == "ok")
+    if ok.height == 0:
+        return []
+    chosen: list[str] = []
+    champion = ok.filter(pl.col("is_champion"))
+    if champion.height:
+        chosen.append(str(champion["candidate"][0]))
+    for name in ok.sort("mase_vs_pers")["candidate"].to_list():
+        if name not in chosen:
+            chosen.append(str(name))
+        if len(chosen) >= max_models:
+            break
+    return chosen
+
+
+def build_figures(
+    run_dir: Path,
+    *,
+    target_labels: dict[str, str],
+) -> dict[str, dict[str, Path]]:
+    """Regera todas as figuras a partir dos artefatos do run (sem re-treinar)."""
+    predictions_path = run_dir / "predictions.parquet"
+    metrics_path = run_dir / "benchmark.csv"
+    if not predictions_path.exists() or not metrics_path.exists():
+        raise FileNotFoundError(
+            f"Artefatos ausentes em {run_dir}: predictions.parquet e benchmark.csv são necessários."
+        )
+    predictions = pl.read_parquet(predictions_path)
+    metrics = pl.read_csv(metrics_path)
+    comparison_path = run_dir / "comparison.csv"
+    comparison = pl.read_csv(comparison_path) if comparison_path.exists() else pl.DataFrame()
+
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists()
+        else {}
+    )
+    panel = None
+    panel_path = Path(str(manifest.get("panel_path", "")))
+    if panel_path.is_file():
+        panel = pl.read_parquet(panel_path)
+
+    figures: dict[str, dict[str, Path]] = {}
+    for target, label in target_labels.items():
+        target_metrics = metrics.filter(pl.col("target") == target)
+        target_predictions = predictions.filter(pl.col("target") == target)
+        if target_metrics.height == 0 or target_predictions.height == 0:
+            continue
+        models = _select_plot_models(target_metrics)
+        if not models:
+            continue
+        paths: dict[str, Path] = {}
+        spec = TARGET_SPECS.get(target)
+        if panel is not None and spec is not None:
+            with contextlib.suppress(KeyError, ValueError):
+                paths["history"] = plot_observed_history(
+                    panel,
+                    target_column=spec.column,
+                    entity_col="nome_regiao_saude",
+                    target_label=label,
+                    eval_year=int(manifest.get("eval_year", 2024)),
+                    output_path=run_dir / f"fig_history_{target}.png",
+                )
+        paths["observed"] = plot_observed_vs_predicted(
+            target_predictions,
+            models=models,
+            output_path=run_dir / f"fig_observed_vs_predicted_{target}.png",
+            target_label=label,
+            eval_year=int(manifest.get("eval_year", 2024)),
+        )
+        paths["grid"] = plot_region_grid(
+            target_predictions,
+            models=models,
+            output_path=run_dir / f"fig_regions_{target}.png",
+            target_label=label,
+            eval_year=int(manifest.get("eval_year", 2024)),
+        )
+        if comparison.height:
+            target_comparison = comparison.filter(pl.col("target") == target)
+            if target_comparison.height:
+                paths["residuals"] = plot_residuals_by_region(
+                    target_comparison,
+                    models=models,
+                    output_path=run_dir / f"fig_residuals_{target}.png",
+                    target_label=label,
+                )
+        paths["calibration"] = plot_calibration(
+            target_metrics,
+            output_path=run_dir / f"fig_calibration_{target}.png",
+            target_label=label,
+        )
+        figures[target] = paths
+    return figures
+
+
+def _target_sections(
+    run_dir: Path, metrics: pl.DataFrame, target: str, label: str, *, eval_year: int
+) -> str:
     subset = metrics.filter(pl.col("target") == target)
     if subset.height == 0:
         return ""
@@ -97,10 +224,9 @@ def _target_sections(run_dir: Path, metrics: pl.DataFrame, target: str, label: s
         "cobertura_p10_p90",
         "peak_timing_error_weeks",
         "monotonic_violations",
-        "fit_seconds",
     ]
     parts = [
-        f"<h2>{html.escape(label)}</h2>",
+        f"<h3>{html.escape(label)}</h3>",
         "<p>Métricas no ano de avaliação, com treino até 2022 e calibração conformal em 2023. "
         "MASE &lt; 1 supera a persistência; cobertura ideal de P10-P90 é 80%.</p>",
         _table(
@@ -110,14 +236,46 @@ def _target_sections(run_dir: Path, metrics: pl.DataFrame, target: str, label: s
         ),
     ]
     if ok.height:
+        min_coverage = float(np.asarray(ok["cobertura_p10_p90"].min()).item())
+        champion_rows = ok.filter(pl.col("is_champion"))
+        champion_name = (
+            str(champion_rows["candidate"][0]) if champion_rows.height else "—"
+        )
+        champion_coverage = (
+            float(np.asarray(champion_rows["cobertura_p10_p90"][0]).item())
+            if champion_rows.height
+            else float("nan")
+        )
+        verdict = (
+            "abaixo do piso nominal de 80% — recalibrar antes de uso"
+            if min_coverage < 0.80
+            else "acima do piso nominal de 80%"
+        )
+        parts.append(
+            f'<p class="note">Campeão <strong>{html.escape(champion_name)}</strong>: cobertura '
+            f"P10-P90 de <strong>{champion_coverage:.1%}</strong>. Pior caso do alvo: "
+            f"<strong>{min_coverage:.1%}</strong> ({verdict}).</p>"
+        )
         best = ok.sort("mase_vs_pers").head(1)["candidate"].to_list()[0]
         champion_rows = ok.filter(pl.col("is_champion"))
         champion = champion_rows["candidate"].to_list()[0] if champion_rows.height else best
         chosen = list(dict.fromkeys([champion, best]))[:2]
         parts.append(
             _figure(
+                run_dir / f"fig_history_{target}.png",
+                f"Contexto histórico do período: total regional observado por semana — {label}.",
+            )
+        )
+        parts.append(
+            _figure(
                 run_dir / f"fig_observed_vs_predicted_{target}.png",
                 f"Leitos observados vs. P50 previsto (soma regional por semana) — {label}.",
+            )
+        )
+        parts.append(
+            _figure(
+                run_dir / f"fig_regions_{target}.png",
+                f"Leitos observados vs. preditos, região por região — {label} ({eval_year}).",
             )
         )
         parts.append(
@@ -164,14 +322,14 @@ def render_report(
     n_ok = ok.height
     n_total = metrics.height
     sections = "".join(
-        _target_sections(run_dir, metrics, target, label)
+        _target_sections(run_dir, metrics, target, label, eval_year=eval_year)
         for target, label in target_labels.items()
     )
 
     decisions_block = ""
     if decisions.height:
         decisions_block = (
-            "<h2>Catraca Champion-Challenger</h2>"
+            "<h2>4. Catraca Champion-Challenger</h2>"
             "<p>Decisão quantílica contra o campeão registrado "
             "(MASE, Pinball P95, cobertura e timing de pico).</p>"
             + _table(
@@ -213,6 +371,10 @@ deste relatório é afirmação de desempenho <em>out-of-time</em>.</p>
 <p>Baselines obrigatórios (persistência e sazonal-ingênuo) definem o piso; o campeão
 registrado aparece destacado nas tabelas. Candidatos indisponíveis por dependência
 opcional permanecem listados com status próprio, nunca omitidos.</p>
+
+<h2>3. Resultados por alvo</h2>
+<p>Cada alvo tem sua própria unidade: UTI em leitos-dia por semana e clínico/respiratório
+em pacientes-dia. Comparações de MASE são válidas dentro do alvo, nunca entre alvos.</p>
 
 {sections}
 
