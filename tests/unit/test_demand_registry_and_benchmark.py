@@ -326,3 +326,32 @@ def test_local_level_stage1_improves_over_harmonics_only() -> None:
     assert _count_shock_response_violations(local, splits.eval_df) == 0
     components = local.predict_stage_components(splits.eval_df)
     assert components.shock_matrix.shape[0] == splits.eval_df.height
+
+
+def test_percentage_error_metrics_are_robust_to_small_observations() -> None:
+    from previsao_leitos.audit.metrics import percentage_error_summary
+
+    y = np.array([100.0, 100.0, 2.0, 0.0])
+    p = np.array([110.0, 90.0, 2.1, 0.1])
+    summary = percentage_error_summary(y, p, event_mask=np.array([True, False, False, False]))
+    assert 0.0 <= summary["wmape"] <= 100.0
+    assert np.isfinite(summary["erro_pct_mediana"])
+    assert summary["erro_pct_p90"] >= summary["erro_pct_mediana"]
+    assert 0.0 <= summary["subestimacao_pct"] <= 1.0
+    assert np.isfinite(summary["erro_pct_evento"])
+    # Observação minúscula não domina: sem piso, o erro de 0.1/0 seria infinito.
+    assert summary["erro_pct_p90"] < 1000.0
+
+
+def test_benchmark_exposes_percentage_error_columns() -> None:
+    from previsao_leitos.audit.model_benchmark import run_benchmark
+
+    panel = _synthetic_panel()
+    splits = make_modeling_splits(panel, target="uti_adulto", eval_year=2024)
+    result = run_benchmark(
+        splits, run_id="pct", candidates="persistencia,f041_core", n_boot=5, seed=1
+    )
+    ok = result.metrics.filter(pl.col("status") == "ok")
+    for column in ("wmape", "erro_pct_mediana", "erro_pct_p90", "subestimacao_pct"):
+        assert column in ok.columns
+        assert ok[column].is_finite().all()

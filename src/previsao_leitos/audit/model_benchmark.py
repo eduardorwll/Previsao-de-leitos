@@ -26,7 +26,11 @@ from previsao_leitos.audit.hypothesis_ledger import (
     RatchetCriteria,
     RatchetEvaluation,
 )
-from previsao_leitos.audit.metrics import evaluate_probabilistic_predictions, pinball_loss
+from previsao_leitos.audit.metrics import (
+    evaluate_probabilistic_predictions,
+    percentage_error_summary,
+    pinball_loss,
+)
 from previsao_leitos.demand.modeling import ModelingSplits
 from previsao_leitos.demand.models import DemandForecaster
 from previsao_leitos.demand.registry import (
@@ -190,6 +194,7 @@ def _metric_row(
     *,
     spec: CandidateSpec,
     metrics: dict[str, Any],
+    pct: dict[str, float],
     peak_error: float,
     monotonic_violations: int,
     fit_seconds: float,
@@ -215,6 +220,11 @@ def _metric_row(
         "cobertura_p10_p90": float(metrics["cobertura_p10_p90"]),
         "peak_timing_error_weeks": peak_error,
         "monotonic_violations": monotonic_violations,
+        "wmape": pct["wmape"],
+        "erro_pct_mediana": pct["erro_pct_mediana"],
+        "erro_pct_p90": pct["erro_pct_p90"],
+        "subestimacao_pct": pct["subestimacao_pct"],
+        "erro_pct_evento": pct["erro_pct_evento"],
         "fit_seconds": fit_seconds,
         "predict_seconds": predict_seconds,
         "n_obs": n_obs,
@@ -300,10 +310,21 @@ def run_benchmark(
                 target_col="target_y",
             )
             monotonic_violations = _count_shock_response_violations(model, splits.eval_df)
+            event_mask = (
+                splits.eval_df[_SHOCK_COL].fill_null(0.0).to_numpy() >= 0.5
+                if _SHOCK_COL in splits.eval_df.columns
+                else None
+            )
+            pct = percentage_error_summary(
+                splits.eval_df["target_y"].to_numpy(),
+                preds["pred_p50"].to_numpy(),
+                event_mask=event_mask,
+            )
             metric_rows.append(
                 _metric_row(
                     spec=spec,
                     metrics=metrics,
+                    pct=pct,
                     peak_error=peak_error,
                     monotonic_violations=monotonic_violations,
                     fit_seconds=fit_seconds,

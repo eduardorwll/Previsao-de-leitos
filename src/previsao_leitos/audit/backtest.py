@@ -226,6 +226,10 @@ def evaluate_fold(
                 "event_share": event_share,
                 "regions_used": regions_used,
                 "monotonic_violations": int(row.get("monotonic_violations") or 0),
+                "wmape": float(row.get("wmape") or float("nan")),
+                "erro_pct_mediana": float(row.get("erro_pct_mediana") or float("nan")),
+                "erro_pct_p90": float(row.get("erro_pct_p90") or float("nan")),
+                "subestimacao_pct": float(row.get("subestimacao_pct") or float("nan")),
                 "fit_seconds": float(row.get("fit_seconds") or 0.0),
             }
         )
@@ -252,6 +256,13 @@ def summarize_backtest(fold_metrics: pl.DataFrame) -> pl.DataFrame:
         pl.col("peak_abs_weeks").median().alias("peak_abs_median"),
         pl.col("monotonic_violations").sum().alias("monotonic_violations"),
         pl.col("fit_seconds").median().alias("fit_seconds_median"),
+        pl.col("wmape").median().alias("wmape_median"),
+        pl.col("erro_pct_mediana").median().alias("erro_pct_mediana"),
+        pl.col("erro_pct_p90").median().alias("erro_pct_p90"),
+        pl.col("subestimacao_pct").median().alias("subestimacao_pct"),
+        (pl.col("mase_macro").std() / pl.col("mase_macro").mean())
+        .fill_null(0.0)
+        .alias("mase_cv"),
     ).sort("mase_median")
     return summary
 

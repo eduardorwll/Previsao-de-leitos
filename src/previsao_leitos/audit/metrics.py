@@ -131,6 +131,47 @@ def evaluate_probabilistic_predictions(
     }
 
 
+def percentage_error_summary(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    event_mask: np.ndarray | None = None,
+    floor_fraction: float = 0.05,
+) -> dict[str, float]:
+    """Erro percentual vs. dado real, com piso relativo para observações pequenas.
+
+    O piso (`floor_fraction * media observada`) evita que regiões com ocupação
+    próxima de zero produzam percentuais explosivos — o problema clássico do MAPE.
+    """
+    y = np.asarray(y_true, dtype=np.float64)
+    p = np.asarray(y_pred, dtype=np.float64)
+    if y.size == 0:
+        return {
+            "wmape": float("nan"),
+            "erro_pct_mediana": float("nan"),
+            "erro_pct_p90": float("nan"),
+            "subestimacao_pct": float("nan"),
+            "erro_pct_evento": float("nan"),
+        }
+    mean_abs = float(np.mean(np.abs(y)))
+    floor = max(floor_fraction * mean_abs, 1e-9)
+    denom = np.maximum(np.abs(y), floor)
+    err = 100.0 * np.abs(p - y) / denom
+    total = float(np.sum(np.abs(y)))
+    summary = {
+        "wmape": 100.0 * float(np.sum(np.abs(p - y))) / total if total > 1e-9 else float("nan"),
+        "erro_pct_mediana": float(np.median(err)),
+        "erro_pct_p90": float(np.percentile(err, 90)),
+        "subestimacao_pct": float(np.mean(p < y)),
+        "erro_pct_evento": float("nan"),
+    }
+    if event_mask is not None:
+        mask = np.asarray(event_mask, dtype=bool)
+        if mask.shape == err.shape and mask.any():
+            summary["erro_pct_evento"] = float(np.median(err[mask]))
+    return summary
+
+
 def expected_calibration_error(
     y_true_event: np.ndarray,
     pred_prob: np.ndarray,
