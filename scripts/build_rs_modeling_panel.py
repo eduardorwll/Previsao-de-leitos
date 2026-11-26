@@ -94,7 +94,33 @@ def build_modeling_panel(
         pl.col("oni_c_lag4").fill_null(0.0),
         pl.col("enso_regime").fill_null("neutro"),
     )
-    return panel.sort(["nome_regiao_saude", "ano_epi", "semana_epi"])
+    panel = panel.sort(["nome_regiao_saude", "ano_epi", "semana_epi"])
+    # Memória causal do choque (Task 1.3.5): a resposta de leitos chega semanas depois
+    # da enchente; estas colunas dão ao modelo a exposição acumulada, não só a de t.
+    panel = panel.with_columns(
+        pl.col("prob_enchente_f03_oof")
+        .rolling_sum(window_size=4, min_samples=1)
+        .over("nome_regiao_saude")
+        .alias("shock_cum_4w"),
+        pl.col("prob_enchente_f03_oof")
+        .rolling_sum(window_size=8, min_samples=1)
+        .over("nome_regiao_saude")
+        .alias("shock_cum_8w"),
+        pl.col("prob_enchente_f03_oof")
+        .rolling_max(window_size=8, min_samples=1)
+        .over("nome_regiao_saude")
+        .alias("shock_max_8w"),
+        pl.col("prob_enchente_f03_oof")
+        .ewm_mean(alpha=0.16, min_samples=1)
+        .over("nome_regiao_saude")
+        .alias("shock_ewm_4w"),
+    ).with_columns(
+        pl.col("shock_cum_4w").fill_null(0.0),
+        pl.col("shock_cum_8w").fill_null(0.0),
+        pl.col("shock_max_8w").fill_null(0.0),
+        pl.col("shock_ewm_4w").fill_null(0.0),
+    )
+    return panel
 
 
 def main(argv: list[str] | None = None) -> int:

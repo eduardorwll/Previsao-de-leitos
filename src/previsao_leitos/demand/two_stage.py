@@ -55,6 +55,9 @@ _FORBIDDEN_AR_COLS: frozenset[str] = frozenset(
 )
 
 _DEFAULT_MONO_POS: tuple[str, ...] = (
+    "shock_cum",
+    "shock_max",
+    "shock_ewm",
     "prob_enchente_f03",
     "severidade_hidro_f03",
     "chuva_montante_pond",

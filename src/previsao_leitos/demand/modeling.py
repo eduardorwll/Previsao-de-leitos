@@ -39,6 +39,14 @@ STATIC_FEATURE_COLS: tuple[str, ...] = (
     "capacidade_sem",
 )
 
+#: Memória causal do choque (Task 1.3.5), opcional via `shock_memory=True`.
+SHOCK_MEMORY_COLS: tuple[str, ...] = (
+    "shock_cum_4w",
+    "shock_cum_8w",
+    "shock_max_8w",
+    "shock_ewm_4w",
+)
+
 #: Colunas que precisam existir no painel montado antes do split.
 REQUIRED_MODELING_COLS: tuple[str, ...] = (
     "nome_regiao_saude",
@@ -201,6 +209,7 @@ def make_modeling_splits(
     horizon_weeks: int = 2,
     policy: SplitPolicy | None = None,
     allow_holdout: bool = False,
+    shock_memory: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
     spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
@@ -213,6 +222,15 @@ def make_modeling_splits(
     validate_modeling_panel(panel, spec)
 
     enriched = attach_capacity(panel, spec)
+    extra_cols: tuple[str, ...] = ()
+    if shock_memory:
+        missing = [c for c in SHOCK_MEMORY_COLS if c not in enriched.columns]
+        if missing:
+            raise DataContractError(
+                f"Memória do choque pedida, mas faltam {missing}. "
+                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
+            )
+        extra_cols = SHOCK_MEMORY_COLS
     origin_meta = enriched.select(
         ["nome_regiao_saude", "ano_epi", "semana_epi", "porte_regional", "enso_regime", "bacia_id"]
     )
@@ -224,6 +242,7 @@ def make_modeling_splits(
         target_col=spec.column,
         dynamic_feature_cols=DYNAMIC_FEATURE_COLS,
         static_feature_cols=STATIC_FEATURE_COLS,
+        extra_feature_cols=extra_cols,
         horizon_weeks=horizon_weeks,
         lag_weeks=(0, 1, 2),
         eval_year=cal_year,
@@ -236,6 +255,7 @@ def make_modeling_splits(
         target_col=spec.column,
         dynamic_feature_cols=DYNAMIC_FEATURE_COLS,
         static_feature_cols=STATIC_FEATURE_COLS,
+        extra_feature_cols=extra_cols,
         horizon_weeks=horizon_weeks,
         lag_weeks=(0, 1, 2),
         eval_year=eval_year,

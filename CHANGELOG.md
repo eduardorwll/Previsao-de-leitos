@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Memória causal do choque (`Task 1.3.5`, Feature F20) — resultado negativo:** `shock_cum_4w/8w`, `shock_max_8w` e `shock_ewm_4w` (flag `--shock-memory`, default off) não alteram acurácia (`±0,3%`, dentro do ruído) nem corrigem a fase (`0,1–0,3` semana no melhor caso). Evidência de que o pico é sazonal e o choque muda amplitude, não fase; a prioridade passa a ser dados novos e o benchmark documentado.
+
+### Added
 - **Nível local no Estágio 1 (`Task 1.3.4`, Feature F19):** `OrthogonalTwoStageOccupancyForecaster` ganhou `use_local_level` — o Estágio 1 passa a receber `y_roll12 / capacidade_sem` (média de 12 semanas em taxa), fornecendo âncora de patamar sem copiar a última observação. Nos 6 folds: `MASE 1,699 → 1,135` (UTI adulto), `1,743 → 1,156` (UTI total), `1,591 → 1,103` (clínico), `1,088 → 0,940` (respiratório), com cobertura dos conformais subindo para `0,79–0,81`. O `F04.1` ainda não alcança o GBDT (`0,84–0,96`), mas a mudança corrigiu o defeito dominante e passou a ser a base dos conformais.
 
 ### Added

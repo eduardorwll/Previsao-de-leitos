@@ -724,6 +724,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
             candidates=selected,
             n_boot=args.n_boot,
             seed=args.seed,
+            shock_memory=args.shock_memory,
             run_id=run_id,
         )
         fold_frames.append(result.fold_metrics.with_columns(pl.lit(spec.key).alias("target")))
@@ -884,6 +885,12 @@ def build_parser() -> argparse.ArgumentParser:
             default="auto",
             help="Dispositivo do amostrador bayesiano (GPU exige numpyro+JAX).",
         )
+        p_bench.add_argument(
+            "--shock-memory",
+            action="store_true",
+            default=False,
+            help="Inclui memória causal do choque (somas/EWMA) como features.",
+        )
         p_bench.add_argument("--no-report", action="store_true", default=False)
         p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
         p_bench.add_argument("--allow-holdout", action="store_true", default=False)
@@ -910,6 +917,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("--run-id", type=str, default="")
     p_bt.add_argument("--seed", type=int, default=42)
     p_bt.add_argument("--n-boot", type=int, default=50)
+    p_bt.add_argument(
+        "--shock-memory",
+        action="store_true",
+        default=False,
+        help="Inclui memória causal do choque (somas/EWMA) como features.",
+    )
     p_bt.add_argument("--no-report", action="store_true", default=False)
     p_bt.add_argument("--no-mirror-downloads", action="store_true", default=False)
 

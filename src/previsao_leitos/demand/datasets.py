@@ -162,6 +162,7 @@ def prepare_global_demand_splits(
     target_col: str,
     dynamic_feature_cols: Sequence[str],
     static_feature_cols: Sequence[str] = (),
+    extra_feature_cols: Sequence[str] = (),
     horizon_weeks: int = 2,
     lag_weeks: Sequence[int] = (0, 1, 2, 3, 4),
     eval_year: int = 2024,
@@ -207,10 +208,13 @@ def prepare_global_demand_splits(
 
     lag_cols = [f"{col}_lag{k}" for col in dynamic_feature_cols for k in lag_weeks]
     valid_static = [c for c in static_feature_cols if c in enriched.columns]
+    # Colunas extras entram sem defasagem: já carregam memória (ex.: soma móvel do choque).
+    valid_extra = [c for c in extra_feature_cols if c in enriched.columns]
     feature_cols = tuple(
         [
             *lag_cols,
             *valid_static,
+            *valid_extra,
             "y_origin",
             "y_roll4",
             "y_roll12",
