@@ -55,9 +55,19 @@ from previsao_leitos.ingestion.wave2a_clients import (
     ingest_opendatasus_sivep_csv_lgpd,
     parse_noaa_mei_v2_table,
 )
+from previsao_leitos.ingestion.wave2b_clients import (
+    AnaHidrowebClient,
+    AnaHidrowebCredentials,
+    AnaStationFetchResult,
+    MergeCptecClient,
+    build_merge_cptec_daily_url,
+)
 
 __all__ = [
     "UF_CODE_TO_SIGLA",
+    "AnaHidrowebClient",
+    "AnaHidrowebCredentials",
+    "AnaStationFetchResult",
     "AtomicParquetCache",
     "BigQueryAdapter",
     "CachedPayload",
@@ -65,6 +75,7 @@ __all__ = [
     "IngestionConfig",
     "IngestionManifest",
     "IngestionResult",
+    "MergeCptecClient",
     "ParquetFixtureAdapter",
     "QueryParam",
     "QuerySpec",
@@ -78,6 +89,7 @@ __all__ = [
     "build_cnes_beds_by_specialty_query",
     "build_cnes_teaching_hospitals_query",
     "build_ibge_municipios_query",
+    "build_merge_cptec_daily_url",
     "build_sih_active_census_query",
     "build_sih_delay_triangle_query",
     "build_sih_external_referral_matrix_query",

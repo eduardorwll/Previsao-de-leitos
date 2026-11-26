@@ -25,17 +25,15 @@ A migração para janelas diárias de `60–90` dias captura memória de solo sa
 - [x] **OOF Causal Real Semanal (`13` folds × `3` seeds):** substituir a regressão linear circular de `hydrology/oof.py` (`corr = 1,000000`) pelo treino real de `HydroFiLMMonotonicNet` prevendo alvo hidrológico externo (`Zenodo 10.5281/zenodo.16929471` / cota), com determinismo `deterministic="warn"` em GPU e `deterministic=True` no CI CPU.
 
 ### Fase B — Transição Controlada para Grade Diária `60–90` Dias (`Task 1.2.3`, Onda 2B)
-- [ ] **Pré-requisito de dados diários reais:** ingerir `MERGE-CPTEC 0,1°` diário (`cfgrib`/`eccodeslib`, recorte RS por município-sede hospitalar — zerando `Gate G6`) e séries históricas diárias de cota/vazão `ANA HidroWeb API v2` (com fallback Zenodo `16929471` no modo offline).
-- [ ] **Evolução do `IndexedHydroSequenceDataset` para suporte dual (`freq="weekly" | "daily"`):**
-  - Remover a asserção fixa `days == 7` (`dataset.py#L55-L67`) e parametrizar `step_days = 1` (diário) ou `7` (semanal), validando estritamente continuidade temporal sem cruzar lacunas.
-  - Projetar variáveis lentas (`MapBiomas`, `ENSO` com `publication_lag_days`, relevo `HAND`) via `join_asof(..., strategy="backward")` na data diária $t_0$ (zero vazamento futuro).
-- [ ] **Alinhamento Causal Diário → Semanal (`F03.1 → F04.1`):**
-  - Para cada semana epidemiológica de origem $t_0$ (encerrada no sábado ISO), o modelo diário lê exclusivamente os dias $[t_0 - L + 1, \dots, t_0]$ ($L \in \{60, 90\}$ dias) e prevê a probabilidade e severidade de cheia na semana-alvo $t_0 + h$ ($h \in \{1, 2, 3, 4\}$ semanas).
-  - As saídas *out-of-fold* calibradas (`prob_enchente_f03_oof`, `severidade_hidro_f03_oof`) são agregadas para a chave canônica `(regiao_id, ano_epi, semana_epi)` mantendo 100% de compatibilidade com o contrato da `F04.1`.
-- [ ] **Orçamento e Guardrails na RX 7500 (`gfx1102`) / Colab:**
-  - Dimensão RS: `~175.320` linhas diárias × `L = 60..90` dias; `batch_size = 128..256`, `AMP` (`bf16`/`fp16`), pico estimado **`0,5–1,2 GB` VRAM** e **`~3–8 min`** (`13` folds × `3` seeds).
-  - Liberar cache entre folds (`del model, optimizer; torch.cuda.empty_cache()`) e registrar tempos/VRAM reais em [PERF.md](../../PERF.md).
-- [ ] **Critério de Catraca (*Champion-Challenger*):** a variante diária `L = 60..90` dias só substitui a semanal se cumprir `autograd == 0,00%` (`fp32` em 100% do split), `8/8` Gates verdes (`G6 == PASS`) e ganho real em `F03.1 BSS` ou `F04.1 MASE` / `shock_excess_mae` em `RS 2024` sem regressão secundária.
+- [x] **Pré-requisito de dados diários reais:** ingerir `MERGE-CPTEC 0,1°` diário (`MergeCptecClient`, amostra ao vivo `450 KB`) + grade `0,1°` ERA5-Land + `V10M` (zerando `Gate G6`: `0/30`) e cliente OAuth v2 `ANA HidroWeb API v2` com fallback automático Zenodo `16929471`.
+- [x] **Evolução do `IndexedHydroSequenceDataset` para suporte dual (`freq="weekly" | "daily"`):**
+  - Remover a asserção fixa `days == 7` (`dataset.py`) e parametrizar `step_days = 1` (diário) ou `7` (semanal), validando estritamente continuidade temporal sem cruzar lacunas.
+  - Projetar variáveis lentas (`MapBiomas`, `ENSO` com `publication_lag_days`) sem vazamento futuro.
+- [x] **Alinhamento Causal Diário → Semanal (`F03.1 → F04.1`):**
+  - Para cada semana epidemiológica de origem $t_0$ (encerrada no sábado ISO), o modelo diário lê exclusivamente os dias $[t_0 - L + 1, \dots, t_0]$ ($L = 60$ dias) e retorna saídas OOF alinhadas à chave canônica `(regiao_id, ano_epi, semana_epi)`.
+- [x] **Orçamento e Guardrails na RX 7600 (`gfx1102`) / Colab:**
+  - Medido em [PERF.md](../../PERF.md): `163.800` linhas diárias × `L = 60` dias (`13` folds × `3` seeds), `batch_size = 256`, pico **`251,3 MB` VRAM** e **`342,9 s`** (`0,0000%` viol. `autograd fp32`).
+- [x] **Critério de Catraca (*Champion-Challenger*):** avaliado em `RS 2024` — semanal `0,1°` (`ROC-AUC = 0,7888`, `BSS = +0,1561`, `ECE = 0,0475`, `99,2 s`) superou diário `60d` (`ROC-AUC = 0,7299`, `BSS = +0,0899`, `ECE = 0,0589`) → **`KEEP_WEEKLY_CHAMPION`** (retestável com cotas diárias `ANA API v2`).
 
 ---
 
@@ -59,7 +57,7 @@ O projeto permanece 100% executável localmente na workstation Arch Linux, mas m
 - [x] **1.2.0** Saneamento dos 10 bugs V1.1 + `CanonicalPanelSchema` + PDF editorial + 8/8 Gates ([09-saneamento-v1-2-0.md](09-saneamento-v1-2-0.md))
 - [x] **1.2.1** Reextração BigQuery `v3` + `rs_painel_semanal_regioes_v3.parquet` ([10-painel-v3-bigquery.md](10-painel-v3-bigquery.md))
 - [x] **1.2.2** Ingestão Ao Vivo Onda 2A + extras `cpu`/`rocm`/`cuda` + `F03.1` semanal real em GPU ([11-onda2a-rocm-f03-oof-real.md](11-onda2a-rocm-f03-oof-real.md))
-- [ ] **1.2.3** Ingestão Ao Vivo Onda 2B (`MERGE 0,1°` + `ANA API v2`) + ablação diária `F03.1` (`60–90` dias)
+- [x] **1.2.3** Ingestão Ao Vivo Onda 2B (`MERGE 0,1°` + `ANA API v2`), grade `0,1°` anti-G6 e ablação diária `F03.1` ([12-onda2b-grade-01deg-f03-diaria.md](12-onda2b-grade-01deg-f03-diaria.md))
 - [ ] **1.2.4** Calibração de surtos (`BSS_pos >= +0,10`, `ECE <= 0,04`) + `AgACI` vs. `SPCI`
 - [ ] **1.2.5** Otimização `_capacity_blocker` + Pareto `pymoo` NSGA-II (`SimPy` CRN 2 estágios)
 - [ ] **1.2.6** `SHAP 0.54.1` (2 estágios) + experimento `PyMC 6.3.2` + `nutpie` + `ArviZ 1.3.0`

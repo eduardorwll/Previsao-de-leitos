@@ -278,10 +278,15 @@ def main() -> int:
     v3_path = Path("data/processed/rs_painel_semanal_regioes_v3.parquet")
     v2_path = Path("data/processed/rs_painel_semanal_regioes_v2.parquet")
     oof_neural_path = Path("data/processed/rs_f03_hydro_oof_v3.parquet")
+    daily_ablation_path = Path("data/processed/rs_f03_ablation_daily_60d_vs_weekly.json")
     panel_path = v3_path if v3_path.exists() else v2_path
     is_v3 = panel_path == v3_path
     has_real_oof = is_v3 and oof_neural_path.exists()
-    if has_real_oof:
+    has_wave2b = has_real_oof and daily_ablation_path.exists()
+    if has_wave2b:
+        run_id = "rs_v1_2_3_wave2b_01deg_2024"
+        version_tag = "V1.2.3"
+    elif has_real_oof:
         run_id = "rs_v1_2_2_f03_real_2024"
         version_tag = "V1.2.2"
     elif is_v3:

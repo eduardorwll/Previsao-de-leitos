@@ -27,6 +27,7 @@ import polars as pl
 from previsao_leitos.domain import CodigoUF
 from previsao_leitos.geo import (
     NasaPowerHydroAdapter,
+    OpenMeteoEra5Adapter,
     RegionCentroid,
     aggregate_daily_to_iso_weekly,
     build_complete_daily_grid,
@@ -74,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Usa snapshots v3 já presentes em data/raw/ sem consultar BigQuery.",
     )
+    parser.add_argument(
+        "--hydro-source",
+        choices=("era5_01deg", "nasa_power"),
+        default="era5_01deg",
+        help="Grade diária de chuva/solo: era5_01deg (0.1° anti-G6) ou nasa_power (0.5°).",
+    )
     args = parser.parse_args(argv)
 
     t0 = time.perf_counter()
@@ -119,12 +126,33 @@ def main(argv: list[str] | None = None) -> int:
         )
         for r in centroids.iter_rows(named=True)
     )
-    hydro_adapter = NasaPowerHydroAdapter(cache_dir=DATA_RAW, max_workers=4)
-    daily_hydro = hydro_adapter.fetch_daily_hydro(
+    nasa_adapter = NasaPowerHydroAdapter(cache_dir=DATA_RAW, max_workers=4)
+    nasa_daily = nasa_adapter.fetch_daily_hydro(
         centroids=centroid_objs,
         start_date=date(2010, 1, 1),
         end_date=date(2025, 12, 31),
     )
+    if args.hydro_source == "era5_01deg":
+        era5_adapter = OpenMeteoEra5Adapter(
+            cache_dir=DATA_RAW, batch_size=10, pause_seconds=1.0
+        )
+        era5_daily = era5_adapter.fetch_daily_hydro(
+            centroids=centroid_objs,
+            start_date=date(2010, 1, 1),
+            end_date=date(2025, 12, 31),
+        )
+        # Combina grade fina 0.1° ERA5-Land (chuva/temp/solo) com vento meridional V10M NASA
+        daily_hydro = era5_daily.join(
+            nasa_daily.select(["entity_id", "data", "vento_sul_ms"]),
+            on=["entity_id", "data"],
+            how="left",
+        ).with_columns(pl.col("vento_sul_ms").fill_null(0.0))
+        print(
+            f"[OK] Grade fina 0.1° ERA5-Land carregada: {daily_hydro.height:,} linhas diárias "
+            f"({daily_hydro['entity_id'].n_unique()} regiões)"
+        )
+    else:
+        daily_hydro = nasa_daily
     daily_grid = build_complete_daily_grid(
         daily_hydro,
         entity_col="entity_id",

@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 from previsao_leitos.domain import DataContractError
 from previsao_leitos.hydrology.calibration import TemperatureScaler
-from previsao_leitos.hydrology.dataset import IndexedHydroSequenceDataset
+from previsao_leitos.hydrology.dataset import DatasetFreq, IndexedHydroSequenceDataset
 from previsao_leitos.hydrology.device import (
     DeviceRequest,
     release_gpu_memory,
@@ -155,6 +155,9 @@ def generate_neural_hydro_oof_predictions(
     train_end_year: int = 2022,
     cal_year: int = 2023,
     seq_len: int = 8,
+    freq: DatasetFreq = "weekly",
+    date_col: str = "data",
+    sample_mask_col: str | None = None,
     max_epochs: int = 8,
     batch_size: int = 128,
     hidden_dim: int = 32,
@@ -207,7 +210,12 @@ def generate_neural_hydro_oof_predictions(
 
     scale_cols = (*dyn_cols, *ctx_cols, *enso_cols)
     key_cols = [entity_col, "ano_epi", "semana_epi"]
-    ordered_base = panel_df.sort(key_cols)
+    sort_cols = (
+        [entity_col, date_col]
+        if freq == "daily" and date_col in panel_df.columns
+        else key_cols
+    )
+    ordered_base = panel_df.sort(sort_cols)
 
     # Acumuladores por chave (entity, ano_epi, semana_epi)
     pred_records: list[pl.DataFrame] = []
@@ -249,6 +257,9 @@ def generate_neural_hydro_oof_predictions(
             event_col=event_col,
             severity_col=severity_col,
             seq_len=seq_len,
+            freq=freq,
+            date_col=date_col,
+            sample_mask_col=sample_mask_col,
             preload_device=dev_preload,
         )
         ds_sc = IndexedHydroSequenceDataset(
@@ -262,6 +273,9 @@ def generate_neural_hydro_oof_predictions(
             event_col=event_col,
             severity_col=severity_col,
             seq_len=seq_len,
+            freq=freq,
+            date_col=date_col,
+            sample_mask_col=sample_mask_col,
             preload_device=None,
         )
         if len(ds_tr) < 16 or len(ds_sc) == 0:
@@ -320,10 +334,14 @@ def generate_neural_hydro_oof_predictions(
                 f"ok em {fold_dt:.1f}s (viol={max_autograd_viol:.4f})",
                 flush=True,
             )
-        meta = ds_sc.sample_metadata.with_columns(
-            pl.Series("_oof_logit", np.mean(logits_seeds, axis=0), dtype=pl.Float64),
-            pl.Series("_oof_sev", np.mean(sev_seeds, axis=0), dtype=pl.Float64),
-        ).filter(pl.col("ano_epi").is_in(sorted(target_years)))
+        meta = (
+            ds_sc.sample_metadata.select(key_cols)
+            .with_columns(
+                pl.Series("_oof_logit", np.mean(logits_seeds, axis=0), dtype=pl.Float64),
+                pl.Series("_oof_sev", np.mean(sev_seeds, axis=0), dtype=pl.Float64),
+            )
+            .filter(pl.col("ano_epi").is_in(sorted(target_years)))
+        )
         return meta
 
     # Folds anuais expansivos dentro do treino (<= train_end_year)
@@ -344,11 +362,17 @@ def generate_neural_hydro_oof_predictions(
         if fold_out is not None and not fold_out.is_empty():
             pred_records.append(fold_out)
 
+    target_base = (
+        ordered_base.filter(pl.col(sample_mask_col).fill_null(False))
+        if (freq == "daily" and sample_mask_col is not None)
+        else ordered_base
+    )
+
     if pred_records:
         all_preds = pl.concat(pred_records).unique(subset=key_cols, keep="last")
-        merged = ordered_base.join(all_preds, on=key_cols, how="left")
+        merged = target_base.join(all_preds, on=key_cols, how="left")
     else:
-        merged = ordered_base.with_columns(
+        merged = target_base.with_columns(
             pl.lit(-2.0, dtype=pl.Float64).alias("_oof_logit"),
             pl.lit(0.0, dtype=pl.Float64).alias("_oof_sev"),
         )
