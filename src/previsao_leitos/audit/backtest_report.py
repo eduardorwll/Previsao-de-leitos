@@ -19,6 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from previsao_leitos.audit import benchmark_report as _benchmark_report
+from previsao_leitos.audit.categorization import categorize, normalize_backtest
 
 _COLOR_MAIN = "#D55E00"
 _COLOR_A = "#0072B2"
@@ -171,13 +172,20 @@ pior fold <strong>{worst_fold:.3f}</strong>, cobertura mediana <strong>{coverage
 erro de pico mediano <strong>{peak:.1f} semanas</strong>.</p>
 {_benchmark_report._table(top, columns)}
 
-<h2>3. Estabilidade entre folds</h2>
+<h2>3. Categorias por quesito (rubrica v1)</h2>
+<p>Selo = pior entre acurácia, fase e calibração; violação monotônica reprova.</p>
+{_benchmark_report._table(
+    categorize(normalize_backtest(summary)),
+    ["candidate", "acuracia", "fase", "calibracao", "robustez", "consistencia", "custo", "selo"],
+)}
+
+<h2>4. Estabilidade entre folds</h2>
 {_benchmark_report._figure(
     run_dir / "fig_backtest_mase.png",
     "MASE macro por fold; a linha fina é a mediana de cada modelo.",
 )}
 
-<h2>4. Nível vs. fase</h2>
+<h2>5. Nível vs. fase</h2>
 <p>Um modelo pode acertar o nível médio e errar a semana do pico — o que é inútil para planejar
 leitos. O quadrante superior direito deste gráfico é o pior cenário para a operação.</p>
 {_benchmark_report._figure(
@@ -185,7 +193,7 @@ leitos. O quadrante superior direito deste gráfico é o pior cenário para a op
     "MASE mediano vs. erro absoluto do pico (semanas).",
 )}
 
-<h2>5. Leitura e próximos passos</h2>
+<h2>6. Leitura e próximos passos</h2>
 <ul>
 <li>Cobertura mediana de <strong>{coverage:.1%}</strong> — o piso nominal é 80%.</li>
 <li>Erro de pico de <strong>{peak:.1f} semanas</strong> — a meta da fase

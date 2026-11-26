@@ -499,6 +499,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     from previsao_leitos.audit.benchmark_report import (
         build_figures,
         mirror_to_downloads,
+        render_model_cards,
         render_report,
         sha256_of,
     )
@@ -638,6 +639,10 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     build_figures(run_dir, target_labels={spec.key: spec.label for spec in targets})
+    cards_path = render_model_cards(
+        run_dir, target_labels={spec.key: spec.label for spec in targets}
+    )
+    print(f"[benchmark] cartões: {cards_path}")
 
     print(
         f"[benchmark] run={run_id} | alvos={len(targets)} | jobs={jobs} | "
@@ -798,6 +803,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     from previsao_leitos.audit.benchmark_report import (
         build_figures,
         mirror_to_downloads,
+        render_model_cards,
         render_report,
     )
     from previsao_leitos.demand.modeling import TARGET_SPECS
@@ -815,6 +821,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
         return 2
     models = sorted({str(m) for m in metrics["candidate"].unique().to_list()})
     build_figures(run_dir, target_labels={t: TARGET_SPECS[t].label for t in targets})
+    render_model_cards(run_dir, target_labels={t: TARGET_SPECS[t].label for t in targets})
     _, pdf_path = render_report(
         run_dir,
         target_labels={t: TARGET_SPECS[t].label for t in targets},

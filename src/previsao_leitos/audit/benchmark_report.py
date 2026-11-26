@@ -19,10 +19,16 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from previsao_leitos.audit.categorization import (
+    categorize,
+    categorize_row,
+    normalize_benchmark,
+)
 from previsao_leitos.audit.comparison_plots import (
     plot_calibration,
     plot_observed_history,
     plot_observed_vs_predicted,
+    plot_pct_error,
     plot_region_grid,
     plot_residuals_by_region,
 )
@@ -215,6 +221,12 @@ def build_figures(
             output_path=run_dir / f"fig_calibration_{target}.png",
             target_label=label,
         )
+        paths["pct_error"] = plot_pct_error(
+            target_predictions,
+            models=models,
+            output_path=run_dir / f"fig_pct_error_{target}.png",
+            target_label=label,
+        )
         figures[target] = paths
     return figures
 
@@ -344,7 +356,7 @@ def render_report(
     decisions_block = ""
     if decisions.height:
         decisions_block = (
-            "<h2>4. Catraca Champion-Challenger</h2>"
+            "<h2>6. Catraca Champion-Challenger</h2>"
             "<p>Decisão quantílica contra o campeão registrado "
             "(MASE, Pinball P95, cobertura e timing de pico).</p>"
             + _table(
@@ -353,10 +365,79 @@ def render_report(
             )
         )
 
+    pct_block = ""
+    categories_block = ""
+    if "wmape" in metrics.columns:
+        pct_parts: list[str] = [
+            "<h2>4. Erro percentual vs. dados reais</h2>",
+            "<p>Erro absoluto como fração do valor observado, com piso de 5% da média "
+            "para não explodir em regiões pequenas. A barra do gráfico marca o p90 "
+            "(pior caso típico).</p>",
+        ]
+        for target, label in target_labels.items():
+            subset = metrics.filter(
+                (pl.col("target") == target) & (pl.col("status") == "ok")
+            ).sort("wmape")
+            if subset.height == 0:
+                continue
+            pct_parts.append(f"<h3>{html.escape(label)}</h3>")
+            pct_parts.append(
+                _table(
+                    subset,
+                    [
+                        "candidate",
+                        "wmape",
+                        "erro_pct_mediana",
+                        "erro_pct_p90",
+                        "subestimacao_pct",
+                        "erro_pct_evento",
+                    ],
+                )
+            )
+            pct_parts.append(
+                _figure(
+                    run_dir / f"fig_pct_error_{target}.png",
+                    f"Distribuição do erro percentual por modelo — {label}.",
+                )
+            )
+        pct_block = "".join(pct_parts)
+
+        grade_parts: list[str] = [
+            "<h2>5. Categorias por quesito (rubrica v1)</h2>",
+            "<p>Letras por critério; o selo é o <strong>pior</strong> entre acurácia, "
+            "fase e calibração — erro de fase não se compensa com acurácia. Violação "
+            "monotônica reprova automaticamente.</p>",
+        ]
+        for target, label in target_labels.items():
+            subset = metrics.filter(pl.col("target") == target)
+            if subset.height == 0:
+                continue
+            graded = categorize(
+                normalize_benchmark(subset).with_columns(pl.lit(target).alias("target"))
+            )
+            grade_parts.append(f"<h3>{html.escape(label)}</h3>")
+            grade_parts.append(
+                _table(
+                    graded,
+                    [
+                        "candidate",
+                        "acuracia",
+                        "fase",
+                        "calibracao",
+                        "robustez",
+                        "consistencia",
+                        "custo",
+                        "selo",
+                        "justificativa",
+                    ],
+                )
+            )
+        categories_block = "".join(grade_parts)
+
     eligibility_block = ""
     if eligibility.height and "eligible" in eligibility.columns:
         blocks: list[str] = [
-            "<h2>5. Elegibilidade para uso</h2>",
+            "<h2>7. Elegibilidade para uso</h2>",
             "<p>Um modelo é <strong>elegível</strong> quando atinge cobertura P10-P90 "
             "&ge; 80% e zero violações monotônicas. A catraca promove apenas com ganho de "
             "MASE; esta tabela responde outra pergunta: quem é confiável para uso.</p>",
@@ -383,7 +464,8 @@ def render_report(
                     ],
                 )
             )
-        eligibility_block = "".join(blocks)
+    
+    eligibility_block = "".join(blocks)
 
     manifest_block = ""
     if manifest:
@@ -425,11 +507,15 @@ em pacientes-dia. Comparações de MASE são válidas dentro do alvo, nunca entr
 
 {sections}
 
+{pct_block}
+
+{categories_block}
+
 {decisions_block}
 
 {eligibility_block}
 
-<h2>6. Calibração, monotonicidade e riscos</h2>
+<h2>8. Calibração, monotonicidade e riscos</h2>
 <div class="note">
 A coluna <strong>monotonic_violations</strong> conta quedas de P50 quando o choque
 hidrológico ex-ante aumenta (ADR-0001); o gate é zero. Cobertura fora da faixa
@@ -438,7 +524,7 @@ hidrológico ex-ante aumenta (ADR-0001); o gate é zero. Cobertura fora da faixa
 <p>Baselines ancorados em observação não usam as covariáveis de choque, portanto
 não exercem o teste de monotonicidade — isso é registrado, não escondido.</p>
 
-<h2>7. Limitações e fronteira clínica</h2>
+<h2>9. Limitações e fronteira clínica</h2>
 <ul>
 <li>{_DISCLAIMER}; uso exclusivo em pesquisa e planejamento agregado.</li>
 <li>Resultados referem-se ao ano de desenvolvimento/auditoria ({eval_year}); a
@@ -484,3 +570,149 @@ def mirror_to_downloads(pdf_path: Path, *, downloads_dir: Path | None = None) ->
     if sha256_of(destination) != sha256_of(pdf_path):
         raise RuntimeError("Espelho em ~/Downloads corrompido (SHA-256 divergente).")
     return destination
+
+
+_METRIC_GLOSSARY = """**Como ler estas métricas**
+
+- **wMAPE** — erro percentual ponderado: soma dos erros ÷ soma dos leitos observados.
+  Responde *quanto do volume real se erra*; robusto a regiões pequenas; menor é melhor.
+- **MASE** — erro do modelo ÷ erro da persistência (repetir a semana de origem).
+  `1,00` = empatar com o ingênuo; `0,90` = 10% melhor. Abaixo de `1,00` é o mínimo.
+- **Fase** — distância, em semanas, entre o pico previsto e o observado. Mede se o modelo
+  avisa *quando* o pico chega, não só o tamanho. Alvo operacional: ≤ 2 semanas.
+- **Cobertura P10-P90** — fração de semanas com o valor real dentro do intervalo previsto.
+  Nominal 80%: muito acima = intervalo conservador; muito abaixo = confiança excessiva.
+- **P90 do erro** — erro percentual superado em apenas 10% das semanas: o *pior caso típico*.
+"""
+
+_SEAL_ORDER = ("Reprovado", "D", "C", "B", "A", "N/A")
+
+
+def _worst_seal(seals: list[str]) -> str:
+    usable = [s for s in seals if s in _SEAL_ORDER]
+    if not usable:
+        return "N/A"
+    return min(usable, key=_SEAL_ORDER.index)
+
+
+def render_model_cards(run_dir: Path, *, target_labels: dict[str, str]) -> Path:
+    """Gera um cartão por modelo e o índice consolidado (Markdown)."""
+    metrics_path = run_dir / "benchmark.csv"
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"benchmark.csv ausente em {run_dir}")
+    metrics = pl.read_csv(metrics_path)
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists()
+        else {}
+    )
+    cards_dir = run_dir / "cards"
+    cards_dir.mkdir(parents=True, exist_ok=True)
+
+    overview: list[str] = [
+        f"# Cartões de modelo — `{run_dir.name}`",
+        "",
+        f"> Rubrica `v1` · run `{run_dir.name}` · painel "
+        f"`{str(manifest.get('panel_sha256', '—'))[:12]}`",
+        "",
+        _METRIC_GLOSSARY,
+        "",
+        "| Modelo | Selo | Alvos | Justificativa |",
+        "| :--- | :---: | :--- | :--- |",
+    ]
+    card_files: list[str] = []
+
+    for candidate in sorted(metrics["candidate"].unique().to_list()):
+        rows = metrics.filter(pl.col("candidate") == candidate).sort("target")
+        normalized = normalize_benchmark(rows)
+        graded_rows = [
+            {**categorize_row(row), "target": target}
+            for row, target in zip(normalized.to_dicts(), rows["target"].to_list(), strict=False)
+        ]
+        seals = [str(item["selo"]) for item in graded_rows]
+        model_seal = _worst_seal(seals)
+        weakest = next(
+            (item["justificativa"] for item in graded_rows if item["selo"] == model_seal),
+            "—",
+        )
+        overview.append(
+            f"| [{candidate}](cards/{candidate}.md) | **{model_seal}** | "
+            f"{', '.join(target_labels.get(t, t) for t in rows['target'].to_list())} | "
+            f"{weakest} |"
+        )
+
+        lines: list[str] = [
+            f"# {candidate}",
+            "",
+            f"**Selo geral:** `{model_seal}` · **Rubrica:** `v1` · "
+            f"**Família:** `{rows['family'][0]}`",
+            "",
+            _METRIC_GLOSSARY,
+            "",
+            "## Resultados por alvo",
+            "",
+            "| Alvo | wMAPE | MASE | Fase (sem.) | Cobertura | P90 do erro | Subestimação |",
+            "| :--- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        for row in rows.to_dicts():
+            label = target_labels.get(str(row["target"]), str(row["target"]))
+            if row.get("status") != "ok":
+                lines.append(f"| {label} | — | — | — | — | — | — |")
+                continue
+            lines.append(
+                "| {label} | {wmape:.1f}% | {mase:.3f} | {peak:.1f} | {cov:.1%} | "
+                "{p90:.1f}% | {under:.1%} |".format(
+                    label=label,
+                    wmape=float(row["wmape"]),
+                    mase=float(row["mase_vs_pers"]),
+                    peak=float(row["peak_timing_error_weeks"]),
+                    cov=float(row["cobertura_p10_p90"]),
+                    p90=float(row["erro_pct_p90"]),
+                    under=float(row["subestimacao_pct"]),
+                )
+            )
+        lines.extend(
+            [
+                "",
+                "## Categorias",
+                "",
+                "| Alvo | Acurácia | Fase | Calibração | Robustez | Consistência | Custo | Selo |",
+                "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+            ]
+        )
+        for item in graded_rows:
+            label = target_labels.get(str(item["target"]), str(item["target"]))
+            lines.append(
+                f"| {label} | {item['acuracia']} | {item['fase']} | {item['calibracao']} | "
+                f"{item['robustez']} | {item['consistencia']} | {item['custo']} | "
+                f"**{item['selo']}** |"
+            )
+        lines.extend(
+            [
+                "",
+                "## Leitura",
+                "",
+                f"- Selo geral (pior caso entre alvos): **{model_seal}**.",
+                f"- Ponto mais fraco: {weakest}.",
+                "- wMAPE e MASE medem tamanho do erro; fase mede o *quando*; cobertura e P90 "
+                "medem a confiança.",
+                "",
+                "## Reprodutibilidade",
+                "",
+                f"- Run: `{run_dir.name}`",
+                f"- Git: `{manifest.get('git_sha', '—')}` · seed `{manifest.get('seed', '—')}`",
+                f"- Painel SHA-256: `{manifest.get('panel_sha256', '—')}`",
+                "",
+                "> Not for patient care or live clinical use. LGPD: agregação e supressão n < 5.",
+            ]
+        )
+        card_path = cards_dir / f"{candidate}.md"
+        card_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        card_files.append(str(card_path.name))
+
+    overview.append("")
+    overview.append(f"_{len(card_files)} cartões gerados._")
+    index_path = run_dir / "benchmark_cards.md"
+    index_path.write_text("\n".join(overview) + "\n", encoding="utf-8")
+    return index_path

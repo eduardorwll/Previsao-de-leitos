@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Benchmark documentado (`Task 1.3.6`):** métricas de erro percentual (`wmape`, mediana, p90, subestimação, evento), rubrica congelada `v1` com selo por pior critério, matriz de categorias, **cartões por modelo** com glossário das métricas e documentação em `docs/benchmark/` (metodologia, catálogo, erro percentual, categorização, artefatos, como estender, leitura de cartões, template e `RESULTADOS.md`).
+
+### Added
 - **Memória causal do choque (`Task 1.3.5`, Feature F20) — resultado negativo:** `shock_cum_4w/8w`, `shock_max_8w` e `shock_ewm_4w` (flag `--shock-memory`, default off) não alteram acurácia (`±0,3%`, dentro do ruído) nem corrigem a fase (`0,1–0,3` semana no melhor caso). Evidência de que o pico é sazonal e o choque muda amplitude, não fase; a prioridade passa a ser dados novos e o benchmark documentado.
 
 ### Added

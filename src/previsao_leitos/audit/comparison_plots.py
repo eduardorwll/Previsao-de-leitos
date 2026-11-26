@@ -337,3 +337,66 @@ def plot_observed_history(
         color="#475569",
     )
     return _atomic_save(fig, output_path)
+
+
+def plot_pct_error(
+    predictions: pl.DataFrame,
+    *,
+    models: Sequence[str],
+    output_path: Path,
+    target_label: str,
+    floor_fraction: float = 0.05,
+) -> Path:
+    """Distribuição do erro percentual por modelo (caixa = quartis, ponto = p90)."""
+    frame = predictions.filter(pl.col("model").is_in(list(models)))
+    if frame.height == 0:
+        raise ValueError("plot_pct_error sem previsões para os modelos pedidos.")
+    fig, ax = plt.subplots(figsize=(8.6, 0.55 * len(models) + 1.8))
+    data: list[np.ndarray] = []
+    labels: list[str] = []
+    for model in models:
+        rows = frame.filter(pl.col("model") == model)
+        observed = rows["observed"].to_numpy().astype(np.float64)
+        predicted = rows["pred_p50"].to_numpy().astype(np.float64)
+        floor = max(floor_fraction * float(np.mean(np.abs(observed))), 1e-9)
+        err = 100.0 * np.abs(predicted - observed) / np.maximum(np.abs(observed), floor)
+        data.append(err)
+        labels.append(model)
+    box = ax.boxplot(
+        data,
+        vert=False,
+        widths=0.55,
+        patch_artist=True,
+        showfliers=False,
+        medianprops={"color": "#111827", "linewidth": 1.4},
+    )
+    for patch, colour in zip(box["boxes"], _PALETTE, strict=False):
+        patch.set_facecolor(colour)
+        patch.set_alpha(0.45)
+        patch.set_edgecolor("#475569")
+    for index, err in enumerate(data, start=1):
+        ax.scatter(
+            [float(np.percentile(err, 90))],
+            [index],
+            marker="|",
+            s=160,
+            color=_COLOR_CHAMPION,
+            zorder=4,
+        )
+    ax.set_yticks(range(1, len(labels) + 1))
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel("Erro percentual vs. observado (%) — piso de 5% da média")
+    ax.set_title(
+        f"{target_label} — distribuição do erro percentual (barra = p90)",
+        fontsize=11,
+        loc="left",
+    )
+    ax.grid(axis="x", alpha=0.25, linewidth=0.6)
+    fig.text(
+        0.01,
+        0.01,
+        "Pesquisa aberta — Not for patient care or live clinical use | LGPD n < 5",
+        fontsize=7,
+        color="#475569",
+    )
+    return _atomic_save(fig, output_path)
