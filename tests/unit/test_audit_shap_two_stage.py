@@ -86,6 +86,7 @@ def test_additivity_residual_in_rate_space_below_1e6(
     panel_split: tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame],
     fitted_model: OrthogonalTwoStageOccupancyForecaster,
 ) -> None:
+    pytest.importorskip("shap")
     _, train_df, _, eval_df = panel_split
     dec = decompose_two_stage_point(fitted_model, eval_df, background=train_df)
 
@@ -99,6 +100,7 @@ def test_composed_point_reconstructs_p50_in_beds(
     panel_split: tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame],
     fitted_model: OrthogonalTwoStageOccupancyForecaster,
 ) -> None:
+    pytest.importorskip("shap")
     _, train_df, _, eval_df = panel_split
     dec = decompose_two_stage_point(fitted_model, eval_df, background=train_df)
 
@@ -120,6 +122,7 @@ def test_conformal_margin_is_reported_separately_from_shap_point(
     panel_split: tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame],
     fitted_model: OrthogonalTwoStageOccupancyForecaster,
 ) -> None:
+    pytest.importorskip("shap")
     _, train_df, cal_df, eval_df = panel_split
     calibrator = ConformalFloodCalibrator(base_model=fitted_model)
     calibrator.fit_calibration(train_df=train_df, cal_df=cal_df)
@@ -164,6 +167,7 @@ def test_decomposition_excludes_forbidden_ar_features(
     panel_split: tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame],
     fitted_model: OrthogonalTwoStageOccupancyForecaster,
 ) -> None:
+    pytest.importorskip("shap")
     _, train_df, _, eval_df = panel_split
     dec = decompose_two_stage_point(fitted_model, eval_df, background=train_df)
     forbidden = {"y_origin", "y_roll4", "y_roll12", "y_dev_roll12", "y_seasonal_naive", "target_y"}
