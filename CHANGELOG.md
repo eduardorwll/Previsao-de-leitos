@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Ensemble com pesos calibrados (`Task 1.3.9a`, Feature F22) — resultado negativo:** `EnsembleForecaster` (pesos ∝ 1/MAE do ano de calibração, piso redistribuído, média dos quantis) e candidato `ensemble_top3`. Não supera o GBDT em UTI (`0,950` vs `0,943`), clínico (`0,956` vs `0,924`) nem necessidade; ganha apenas `0,5%` em respiratório. Membros correlacionados explicam a ausência de diversificação.
+
+### Added
 - **Benchmark documentado (`Task 1.3.6`):** métricas de erro percentual (`wmape`, mediana, p90, subestimação, evento), rubrica congelada `v1` com selo por pior critério, matriz de categorias, **cartões por modelo** com glossário das métricas e documentação em `docs/benchmark/` (metodologia, catálogo, erro percentual, categorização, artefatos, como estender, leitura de cartões, template e `RESULTADOS.md`).
 
 ### Added

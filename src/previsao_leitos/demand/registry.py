@@ -77,6 +77,22 @@ def _two_stage_local_level() -> OrthogonalTwoStageOccupancyForecaster:
     )
 
 
+def _ridge_pooled() -> PooledRidgeDeltaForecaster:
+    return PooledRidgeDeltaForecaster()
+
+
+def _ensemble_top3() -> DemandForecaster:
+    from previsao_leitos.demand.ensemble import EnsembleForecaster
+
+    return EnsembleForecaster(
+        members=(
+            ("gbdt_v1", _gbdt_v1),
+            ("ridge_pooled", _ridge_pooled),
+            ("f041_local_level", _two_stage_local_level),
+        )
+    )
+
+
 def _gbdt_v1() -> QuantileGBDTForecaster:
     return QuantileGBDTForecaster(
         monotone_positive_prefixes=_GBDT_MONO_POS,
@@ -193,6 +209,13 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         fit_mode="plain",
         factory=_two_stage,
         description="Núcleo ortogonal F04.1 (basal + choque monotônico).",
+    ),
+    CandidateSpec(
+        name="ensemble_top3",
+        family="ensemble",
+        fit_mode="train_cal",
+        factory=_ensemble_top3,
+        description="Média ponderada (pesos do ano de calibração) de GBDT, Ridge e F04.1.",
     ),
     CandidateSpec(
         name="f041_local_level",
