@@ -19,6 +19,7 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import date
 from pathlib import Path
 
@@ -52,6 +53,7 @@ from previsao_leitos.demand import (
     CanonicalPanelSchema,
     ConformalFloodCalibrator,
     MondrianEnsoConformalCalibrator,
+    MonotonicSurgeClassifier,
     OrthogonalTwoStageOccupancyForecaster,
     QuantileGBDTForecaster,
     prepare_global_demand_splits,
@@ -279,11 +281,16 @@ def main() -> int:
     v2_path = Path("data/processed/rs_painel_semanal_regioes_v2.parquet")
     oof_neural_path = Path("data/processed/rs_f03_hydro_oof_v3.parquet")
     daily_ablation_path = Path("data/processed/rs_f03_ablation_daily_60d_vs_weekly.json")
+    surge_ablation_path = Path("data/processed/rs_v1_2_4_surge_conformal_ablation.json")
     panel_path = v3_path if v3_path.exists() else v2_path
     is_v3 = panel_path == v3_path
     has_real_oof = is_v3 and oof_neural_path.exists()
     has_wave2b = has_real_oof and daily_ablation_path.exists()
-    if has_wave2b:
+    has_surge_cal = has_wave2b and surge_ablation_path.exists()
+    if has_surge_cal:
+        run_id = "rs_v1_2_4_surge_conformal_2024"
+        version_tag = "V1.2.4"
+    elif has_wave2b:
         run_id = "rs_v1_2_3_wave2b_01deg_2024"
         version_tag = "V1.2.3"
     elif has_real_oof:
@@ -587,9 +594,35 @@ def main() -> int:
     p_surge_v1 = estimate_surge_probability_from_quantiles(
         v1_preds, surge_thr, baseline=y_roll12_arr
     )
-    p_surge_v12 = estimate_surge_probability_from_quantiles(
-        v12_preds, surge_thr, baseline=y_roll12_arr
-    )
+    if has_surge_cal:
+        hist_surge = pl.concat([sp_eval.train_df, cal_df], how="diagonal_relaxed").with_columns(
+            (pl.col("y_origin") / pl.max_horizontal(pl.col("y_roll12"), pl.lit(1.0))).alias(
+                "ratio_origin_roll12"
+            ),
+            (pl.col("y_origin") / pl.max_horizontal(pl.col("capacidade_sem"), pl.lit(1.0))).alias(
+                "occ_origin_cnes"
+            ),
+        )
+        eval_surge = eval_df.with_columns(
+            (pl.col("y_origin") / pl.max_horizontal(pl.col("y_roll12"), pl.lit(1.0))).alias(
+                "ratio_origin_roll12"
+            ),
+            (pl.col("y_origin") / pl.max_horizontal(pl.col("capacidade_sem"), pl.lit(1.0))).alias(
+                "occ_origin_cnes"
+            ),
+        )
+        surge_feats = [*sp_eval.feature_cols, "ratio_origin_roll12", "occ_origin_cnes"]
+        surge_clf = MonotonicSurgeClassifier(seed=42).fit_with_rolling_calibration(
+            hist_surge,
+            surge_feats,
+            cal_years=(2019, 2020, 2021, 2022, 2023),
+            calibration_method="platt",
+        )
+        p_surge_v12 = surge_clf.predict_proba(eval_surge)
+    else:
+        p_surge_v12 = estimate_surge_probability_from_quantiles(
+            v12_preds, surge_thr, baseline=y_roll12_arr
+        )
     ece_v1 = expected_calibration_error(y_surge, p_surge_v1, n_bins=8)
     ece_v12 = expected_calibration_error(y_surge, p_surge_v12, n_bins=8)
 
@@ -704,6 +737,29 @@ def main() -> int:
         ),
     )
 
+    extra_tables_list: list[tuple[str, pl.DataFrame]] = [
+        ("Desempenho Operacional em Leitos Ocupados/Dia (Diárias / 7)", beds_day_df),
+        ("Oráculo Prospectivo El Niño (Perturbação Base + *_lag*)", oracle_df),
+        (
+            "Rebate Contrafactual Duplo W18-30 (BSTS Local-Level vs. do() Recursivo)",
+            rebuttal_v12.summary_table,
+        ),
+    ]
+    if has_surge_cal:
+        ab_data = json.loads(surge_ablation_path.read_text(encoding="utf-8"))
+        extra_tables_list.append(
+            (
+                "Ablação Calibração de Surtos (MonotonicSurgeClassifier + Rolling Platt/Beta)",
+                pl.DataFrame(ab_data["surge_ablation"]),
+            )
+        )
+        extra_tables_list.append(
+            (
+                "Ablação Conformal Normalizada por CNES (Flood vs. Mondrian vs. AgACI vs. SPCI)",
+                pl.DataFrame(ab_data["conformal_ablation"]),
+            )
+        )
+
     dossier = compile_execution_dossier(
         runs_root=Path("reports/runs"),
         run_id=run_id,
@@ -715,14 +771,7 @@ def main() -> int:
         benchmark_table=bench_df,
         hygiene_scorecard=hygiene_scorecard,
         ratchet_evaluation=ratchet_eval,
-        extra_tables=(
-            ("Desempenho Operacional em Leitos Ocupados/Dia (Diárias / 7)", beds_day_df),
-            ("Oráculo Prospectivo El Niño (Perturbação Base + *_lag*)", oracle_df),
-            (
-                "Rebate Contrafactual Duplo W18-30 (BSTS Local-Level vs. do() Recursivo)",
-                rebuttal_v12.summary_table,
-            ),
-        ),
+        extra_tables=tuple(extra_tables_list),
         extra_notes=(
             f"MAE {version_tag} (cluster-bootstrap 14 bacias): "
             f"{basin_ci.point:.2f} diárias/sem ({basin_ci.point / 7.0:.2f} leitos/dia) "

@@ -1,5 +1,10 @@
 """Módulo de modelagem probabilística de demanda, calibração conformal e LOS (Feature F04)."""
 
+from previsao_leitos.demand.adaptive_conformal import (
+    AgACIConformalCalibrator,
+    SPCIConformalCalibrator,
+    compute_cnes_capacity_scale,
+)
 from previsao_leitos.demand.calibration import ConformalFloodCalibrator
 from previsao_leitos.demand.datasets import (
     CanonicalPanelSchema,
@@ -27,6 +32,13 @@ from previsao_leitos.demand.nowcasting import (
     CompetingRisksLosEstimator,
     CompetingRisksSummary,
 )
+from previsao_leitos.demand.surge_calibration import (
+    MonotonicSurgeClassifier,
+    RollingBetaCalibrator,
+    RollingPlattCalibrator,
+    SurgeCalibrationReport,
+    build_surge_target,
+)
 from previsao_leitos.demand.two_stage import (
     OrthogonalTwoStageOccupancyForecaster,
     select_demand_forecaster,
@@ -35,6 +47,7 @@ from previsao_leitos.demand.two_stage import (
 __all__ = [
     "QUANTILE_COL_NAMES",
     "QUANTILE_LEVELS",
+    "AgACIConformalCalibrator",
     "CanonicalPanelSchema",
     "ChainLadderNowcaster",
     "CompetingRisksLosEstimator",
@@ -46,11 +59,18 @@ __all__ = [
     "HierarchicalBasinBayesShrinkage",
     "HierarchicalPosteriorSummary",
     "MondrianEnsoConformalCalibrator",
+    "MonotonicSurgeClassifier",
     "NegativeBinomialHurdleForecaster",
     "OrthogonalTwoStageOccupancyForecaster",
     "PooledRidgeDeltaForecaster",
     "QuantileGBDTForecaster",
+    "RollingBetaCalibrator",
+    "RollingPlattCalibrator",
+    "SPCIConformalCalibrator",
     "SpecialtyLosEstimator",
+    "SurgeCalibrationReport",
+    "build_surge_target",
+    "compute_cnes_capacity_scale",
     "prepare_global_demand_splits",
     "select_demand_forecaster",
     "validate_canonical_panel_frame",
