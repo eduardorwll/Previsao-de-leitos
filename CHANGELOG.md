@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Estudo de fontes ENSO e risco de vintage (`Task 1.3.10`, Feature F24):** avaliado o agregador ElNinoLive (sem dado próprio; NOAA/BOM/NASA) e medido que **ONI × RONI discordam no regime em 14,8% dos meses (33,3% desde 2015)**, apesar de correlação 0,958. Propostos E1–E5 (RONI, BOM semanal, SOI, consenso, probabilidades com vintage) e identificado vazamento por revisão (RONI revisa por até 2 meses) que exige *publication lag* explícito.
+
+### Added
 - **Momentum de internações por causa (`Task 1.3.9b`, Feature F23):** flag `--admissions-momentum` inclui internações (total, respiratória, leptospirose, trauma) com defasagens causais. Ganho material no F04.1 para respiratório (`MASE 0,940 → 0,886`, `−5,7%`; `wMAPE 40,4% → 37,0%`), neutro/negativo no GBDT — evidência de que o gargalo do dois-estágios é sinal de dinâmica, não calibração.
 - **BigQuery desbloqueado:** o projeto válido é `previsao-leitos` (do `.env`); o erro anterior vinha de forçar o default `ai4good` do gcloud. S2iD e SIVEP permanecem inacessíveis sem a API key da Base dos Dados (`403/404`).
 
