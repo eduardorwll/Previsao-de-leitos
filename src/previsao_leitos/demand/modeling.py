@@ -64,6 +64,9 @@ RONI_FEATURE_COLS: tuple[str, ...] = ("roni_c",)
 #: SOI (índice atmosférico do CPC, Task 1.3.10 / E3), opcional via `soi_features=True`.
 SOI_FEATURE_COLS: tuple[str, ...] = ("soi_std",)
 
+#: BOM Niño 3.4 relativo semanal (Task 1.3.10 / E2), opcional via `bom_features=True`.
+BOM_RNINO_FEATURE_COLS: tuple[str, ...] = ("bom_rnino",)
+
 #: Colunas que precisam existir no painel montado antes do split.
 REQUIRED_MODELING_COLS: tuple[str, ...] = (
     "nome_regiao_saude",
@@ -231,6 +234,7 @@ def make_modeling_splits(
     dengue_features: bool = False,
     roni_features: bool = False,
     soi_features: bool = False,
+    bom_features: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
     spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
@@ -275,6 +279,14 @@ def make_modeling_splits(
                 "Regere o painel com `scripts/build_rs_modeling_panel.py`."
             )
         dynamic_cols = (*dynamic_cols, *SOI_FEATURE_COLS)
+    if bom_features:
+        missing_bom = [c for c in BOM_RNINO_FEATURE_COLS if c not in enriched.columns]
+        if missing_bom:
+            raise DataContractError(
+                f"BOM Niño 3.4 relativo pedido, mas faltam {missing_bom}. "
+                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
+            )
+        dynamic_cols = (*dynamic_cols, *BOM_RNINO_FEATURE_COLS)
     extra_cols: tuple[str, ...] = ()
     if shock_memory:
         missing = [c for c in SHOCK_MEMORY_COLS if c not in enriched.columns]

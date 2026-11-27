@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **BOM Niño 3.4 relativo semanal como covariável (`E2` / `Task 1.3.10`, Feature F28) — resultado negativo:** fetcher BOM (`rnino_3.4.txt`, CSV semanal `YYYYMMDD,YYYYMMDD,VALUE`) com cache SHA-256, projeção para grade ISO ancorada no `week_start` com lag de 1 semana (`bom_rnino`) e flag `--bom` (default off). Rejeitada na régua (6 folds): sem ganho material (`-0,27%` a `+0,63%` MASE). Fecha a trilha ENSO E1/E2/E3 com 3/3 índices redundantes com `el_nino_intensity`. Documentado em [docs/features/28-bom-rnino-resultado-negativo.md](docs/features/28-bom-rnino-resultado-negativo.md).
+
+### Added
 - **SOI como covariável (`E3` / `Task 1.3.10`, Feature F27) — resultado negativo:** fetcher CPC SOI (bloco `STANDARDIZED`, sentinela `-999.9` tratada) com cache SHA-256, projeção semanal causal com lag de 1 mês (`soi_std` em `geo/enso_teleconnections.py`) e flag `--soi` (default off). Rejeitada na régua (6 folds): sem ganho material (`-0,09%` a `+1,04%` MASE) — redundante com `el_nino_intensity` (ONI já embute o acoplamento oceano-atmosfera). Documentado em [docs/features/27-soi-resultado-negativo.md](docs/features/27-soi-resultado-negativo.md).
 
 ### Added

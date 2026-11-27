@@ -332,3 +332,64 @@ def build_causal_soi_weekly_features(
         lag_exprs.append(pl.col("soi_std").shift(lag).alias(f"soi_std_lag{lag}"))
 
     return aligned.with_columns(lag_exprs).sort(["ano_epi", "semana_epi"])
+
+
+def parse_bom_rnino_table(raw_text: str) -> pl.DataFrame:
+    """Converte o CSV semanal do BOM Niño 3.4 relativo (`YYYYMMDD,YYYYMMDD,VALOR`) em DataFrame."""
+    rows: list[dict[str, object]] = []
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(",")
+        if len(parts) != 3:
+            continue
+        start_raw, end_raw, val_raw = parts
+        if (
+            len(start_raw) != 8
+            or len(end_raw) != 8
+            or not start_raw.isdigit()
+            or not end_raw.isdigit()
+        ):
+            continue
+        week_start = date(int(start_raw[:4]), int(start_raw[4:6]), int(start_raw[6:8]))
+        week_end = date(int(end_raw[:4]), int(end_raw[4:6]), int(end_raw[6:8]))
+        rows.append(
+            {"week_start": week_start, "week_end": week_end, "bom_rnino": float(val_raw)}
+        )
+
+    if not rows:
+        raise DataContractError("parse_bom_rnino_table: nenhum registro válido encontrado.")
+    return pl.DataFrame(rows).sort("week_start")
+
+
+def build_causal_bom_rnino_weekly(
+    bom_weekly_df: pl.DataFrame,
+    *,
+    publication_lag_weeks: int = 1,
+) -> pl.DataFrame:
+    """Projeta o BOM Niño 3.4 relativo semanal para a grade ISO com lag de publicação.
+
+    O BOM já publica em frequência semanal (semana de segunda a domingo); ancoramos no
+    `week_start` (segunda) para mapear à semana ISO e aplicamos `publication_lag_weeks=1`
+    (o valor da semana W só está disponível na semana seguinte).
+    """
+    if "week_start" not in bom_weekly_df.columns or "bom_rnino" not in bom_weekly_df.columns:
+        raise DataContractError(
+            "bom_weekly_df deve conter pelo menos as colunas 'week_start' e 'bom_rnino'."
+        )
+    if bom_weekly_df.is_empty():
+        raise DataContractError("bom_weekly_df vazio.")
+    if publication_lag_weeks < 0:
+        raise DataContractError("publication_lag_weeks deve ser >= 0.")
+
+    return (
+        bom_weekly_df.sort("week_start")
+        .with_columns(
+            pl.col("week_start").dt.iso_year().cast(pl.Int32).alias("ano_epi"),
+            pl.col("week_start").dt.week().cast(pl.Int8).alias("semana_epi"),
+        )
+        .with_columns(pl.col("bom_rnino").shift(publication_lag_weeks).alias("bom_rnino"))
+        .select(["ano_epi", "semana_epi", "bom_rnino"])
+        .sort(["ano_epi", "semana_epi"])
+    )

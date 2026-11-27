@@ -24,6 +24,7 @@ import polars as pl
 
 from previsao_leitos.domain import DataContractError, SourceUnavailableError
 from previsao_leitos.geo.enso_teleconnections import (
+    parse_bom_rnino_table,
     parse_noaa_oni_table,
     parse_noaa_roni_table,
     parse_noaa_soi_table,
@@ -41,6 +42,8 @@ NOAA_MEI_V2_URL = "https://psl.noaa.gov/enso/mei/data/meiv2.data"
 NOAA_RONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt"
 #: SOI oficial do CPC (componente atmosférico do ENSO, bloco STANDARDIZED).
 NOAA_SOI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/soi"
+#: BOM Niño 3.4 relativo semanal (limiar El Niño +0,8 °C, diferente do NOAA ±0,5 °C).
+BOM_RNINO_URL = "https://www.bom.gov.au/clim_data/IDCK000072/rnino_3.4.txt"
 ZENODO_IPH_RS_RECORD_URL = "https://zenodo.org/api/records/16929471"
 GERINT_POA_CKAN_SEARCH_URL = "https://dadosabertos.poa.br/api/3/action/package_search?q=gerint"
 
@@ -235,6 +238,25 @@ def fetch_noaa_soi_monthly(
     if max_year is not None:
         df = df.filter(pl.col("data_ref").dt.year() <= max_year)
     return df.sort("data_ref"), soi_meta
+
+
+def fetch_bom_rnino_weekly(
+    *,
+    cache_dir: Path,
+    fetcher: HttpFetcher | None = None,
+    max_year: int | None = None,
+) -> tuple[pl.DataFrame, CachedPayload]:
+    """Baixa e parseia a série semanal oficial BOM Niño 3.4 relativo (2008-presente)."""
+    bom_bytes, bom_meta = fetch_cached_bytes(
+        BOM_RNINO_URL,
+        cache_dir=cache_dir,
+        filename="bom_rnino_3_4.txt",
+        fetcher=fetcher,
+    )
+    df = parse_bom_rnino_table(bom_bytes.decode("utf-8", errors="replace"))
+    if max_year is not None:
+        df = df.filter(pl.col("week_start").dt.year() <= max_year)
+    return df.sort("week_start"), bom_meta
 
 
 @dataclass(frozen=True)

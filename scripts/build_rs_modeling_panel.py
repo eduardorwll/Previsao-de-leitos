@@ -18,11 +18,13 @@ import polars as pl
 
 from previsao_leitos.domain import DataContractError, SourceUnavailableError
 from previsao_leitos.geo import (
+    build_causal_bom_rnino_weekly,
     build_causal_enso_weekly_features,
     build_causal_roni_weekly_features,
     build_causal_soi_weekly_features,
 )
 from previsao_leitos.ingestion import (
+    fetch_bom_rnino_weekly,
     fetch_noaa_enso_monthly,
     fetch_noaa_roni_monthly,
     fetch_noaa_soi_monthly,
@@ -124,6 +126,17 @@ def build_modeling_panel(
         )
         panel = panel.join(soi_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
             pl.col("soi_std").fill_null(0.0),
+        )
+    except (SourceUnavailableError, DataContractError):
+        pass
+    # BOM Niño 3.4 relativo semanal (Task 1.3.10 / E2): opcional, como RONI/SOI.
+    try:
+        bom_weekly, _ = fetch_bom_rnino_weekly(cache_dir=enso_cache_dir, max_year=max_year)
+        bom_wk = build_causal_bom_rnino_weekly(bom_weekly).select(
+            ["ano_epi", "semana_epi", "bom_rnino"]
+        )
+        panel = panel.join(bom_wk, on=["ano_epi", "semana_epi"], how="left").with_columns(
+            pl.col("bom_rnino").fill_null(0.0),
         )
     except (SourceUnavailableError, DataContractError):
         pass

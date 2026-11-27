@@ -8,10 +8,12 @@ import polars as pl
 import pytest
 
 from previsao_leitos.geo.enso_teleconnections import (
+    build_causal_bom_rnino_weekly,
     build_causal_enso_weekly_features,
     build_causal_roni_weekly_features,
     build_causal_soi_weekly_features,
     classify_enso_regime,
+    parse_bom_rnino_table,
     parse_noaa_oni_table,
     parse_noaa_roni_table,
     parse_noaa_soi_table,
@@ -192,3 +194,34 @@ def test_build_causal_soi_weekly_features_lags_and_zero_future_leakage() -> None
     pre_a = wk_a.filter((pl.col("ano_epi") < 2024) | (pl.col("semana_epi") <= 16))
     pre_b = wk_b.filter((pl.col("ano_epi") < 2024) | (pl.col("semana_epi") <= 16))
     assert pre_a.equals(pre_b)
+
+
+def test_parse_bom_rnino_table_reads_csv_format() -> None:
+    sample = (
+        "20080728,20080803,0.20\n"
+        "20080804,20080810,0.22\n"
+        "20080811,20080817,-0.26\n"
+    )
+    df = parse_bom_rnino_table(sample)
+    assert df.height == 3
+    assert df["week_start"][0] == date(2008, 7, 28)
+    assert df["week_end"][0] == date(2008, 8, 3)
+    assert df["bom_rnino"][0] == pytest.approx(0.20)
+    assert df["bom_rnino"][2] == pytest.approx(-0.26)
+
+
+def test_build_causal_bom_rnino_weekly_applies_one_week_lag_and_iso_mapping() -> None:
+    df = pl.DataFrame(
+        {
+            "week_start": [date(2024, 1, 1), date(2024, 1, 8), date(2024, 1, 15)],
+            "week_end": [date(2024, 1, 7), date(2024, 1, 14), date(2024, 1, 21)],
+            "bom_rnino": [1.0, 2.0, 3.0],
+        }
+    )
+    wk = build_causal_bom_rnino_weekly(df)
+    assert wk.columns == ["ano_epi", "semana_epi", "bom_rnino"]
+    # 2024-01-01 é segunda-feira -> semana ISO 1 de 2024
+    assert wk["ano_epi"][0] == 2024
+    assert wk["semana_epi"][0] == 1
+    # lag de 1 semana: semana 1 fica nula; semana 2 recebe o valor da semana 1; etc.
+    assert wk["bom_rnino"].to_list() == [None, 1.0, 2.0]

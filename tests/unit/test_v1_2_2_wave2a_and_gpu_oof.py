@@ -20,6 +20,7 @@ from previsao_leitos.hydrology import (
 )
 from previsao_leitos.ingestion import (
     discover_gerint_poa_csv_urls,
+    fetch_bom_rnino_weekly,
     fetch_noaa_enso_monthly,
     fetch_noaa_roni_monthly,
     fetch_noaa_soi_monthly,
@@ -192,6 +193,25 @@ def test_fetch_noaa_soi_monthly_parses_standardized_block(tmp_path: Path) -> Non
     assert soi_df.height == 24  # 1951 (12) + 2024 (12); 2025 cortado por max_year
     assert set(soi_df.columns) == {"data_ref", "soi_std"}
     assert float(soi_df["soi_std"][0]) == pytest.approx(1.5)
+    assert not meta.cache_hit
+
+
+def test_fetch_bom_rnino_weekly_parses_csv(tmp_path: Path) -> None:
+    bom_txt = (
+        b"20080728,20080803,0.20\n"
+        b"20080804,20080810,0.22\n"
+        b"20240101,20240107,1.41\n"
+        b"20250106,20250112,0.20\n"
+    )
+    fetcher = _FakeHttpFetcher(
+        {"https://www.bom.gov.au/clim_data/IDCK000072/rnino_3.4.txt": bom_txt}
+    )
+
+    bom_df, meta = fetch_bom_rnino_weekly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
+    assert int(bom_df["week_start"].dt.year().max()) == 2024
+    assert bom_df.height == 3  # 2025 cortado por max_year
+    assert set(bom_df.columns) == {"week_start", "week_end", "bom_rnino"}
+    assert float(bom_df["bom_rnino"][0]) == pytest.approx(0.20)
     assert not meta.cache_hit
 
 
