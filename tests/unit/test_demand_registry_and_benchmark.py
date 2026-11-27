@@ -355,3 +355,18 @@ def test_benchmark_exposes_percentage_error_columns() -> None:
     for column in ("wmape", "erro_pct_mediana", "erro_pct_p90", "subestimacao_pct"):
         assert column in ok.columns
         assert ok[column].is_finite().all()
+
+
+def test_dengue_features_require_the_column_and_enter_with_lags() -> None:
+    panel = _synthetic_panel()
+    with pytest.raises(DataContractError):
+        make_modeling_splits(panel, target="uti_adulto", eval_year=2024, dengue_features=True)
+
+    with_dengue = panel.with_columns(
+        (pl.col("semana_epi").cast(pl.Float64) * 3.0).alias("dengue_casos")
+    )
+    splits = make_modeling_splits(
+        with_dengue, target="uti_adulto", eval_year=2024, dengue_features=True
+    )
+    assert "dengue_casos_lag0" in splits.feature_cols
+    assert "dengue_casos_lag2" in splits.feature_cols

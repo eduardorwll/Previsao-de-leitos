@@ -731,6 +731,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
             seed=args.seed,
             shock_memory=args.shock_memory,
             admissions_momentum=args.admissions_momentum,
+            dengue_features=args.dengue,
             run_id=run_id,
         )
         fold_frames.append(result.fold_metrics.with_columns(pl.lit(spec.key).alias("target")))
@@ -894,6 +895,12 @@ def build_parser() -> argparse.ArgumentParser:
             help="Dispositivo do amostrador bayesiano (GPU exige numpyro+JAX).",
         )
         p_bench.add_argument(
+            "--dengue",
+            action="store_true",
+            default=False,
+            help="Inclui casos de dengue (SINAN) como feature.",
+        )
+        p_bench.add_argument(
             "--admissions-momentum",
             action="store_true",
             default=False,
@@ -931,6 +938,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("--run-id", type=str, default="")
     p_bt.add_argument("--seed", type=int, default=42)
     p_bt.add_argument("--n-boot", type=int, default=50)
+    p_bt.add_argument(
+        "--dengue",
+        action="store_true",
+        default=False,
+        help="Inclui casos de dengue (SINAN) como feature.",
+    )
     p_bt.add_argument(
         "--admissions-momentum",
         action="store_true",

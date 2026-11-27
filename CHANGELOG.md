@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Dengue (SINAN) como covariável (`Task 1.3.8b`, Feature F25) — resultado negativo:** extração de `532,7 MB` (`br_ms_sinan.microdados_dengue`, 24.563 linhas, 2010–2024), agregação em 30 regiões (`370.914` casos) e flag `--dengue` (default off). Rejeitada na régua: piora em todos os alvos (`+0,2%` a `+3,7%`) — a correlação era sazonalidade já capturada.
+
+### Added
 - **Estudo de fontes ENSO e risco de vintage (`Task 1.3.10`, Feature F24):** avaliado o agregador ElNinoLive (sem dado próprio; NOAA/BOM/NASA) e medido que **ONI × RONI discordam no regime em 14,8% dos meses (33,3% desde 2015)**, apesar de correlação 0,958. Propostos E1–E5 (RONI, BOM semanal, SOI, consenso, probabilidades com vintage) e identificado vazamento por revisão (RONI revisa por até 2 meses) que exige *publication lag* explícito.
 
 ### Added

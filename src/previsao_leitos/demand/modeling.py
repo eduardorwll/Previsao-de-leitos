@@ -39,6 +39,9 @@ STATIC_FEATURE_COLS: tuple[str, ...] = (
     "capacidade_sem",
 )
 
+#: Dengue (SINAN agregado por região/semana), opcional via `dengue_features=True`.
+DENGUE_FEATURE_COLS: tuple[str, ...] = ("dengue_casos",)
+
 #: Internações por causa (momentum assistencial), opcional via `admissions_momentum=True`.
 ADMISSIONS_MOMENTUM_COLS: tuple[str, ...] = (
     "internacoes_total",
@@ -219,6 +222,7 @@ def make_modeling_splits(
     allow_holdout: bool = False,
     shock_memory: bool = False,
     admissions_momentum: bool = False,
+    dengue_features: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
     spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
@@ -239,6 +243,14 @@ def make_modeling_splits(
                 f"Momentum de internações pedido, mas faltam {missing_adm} no painel."
             )
         dynamic_cols = (*DYNAMIC_FEATURE_COLS, *ADMISSIONS_MOMENTUM_COLS)
+    if dengue_features:
+        missing_dengue = [c for c in DENGUE_FEATURE_COLS if c not in enriched.columns]
+        if missing_dengue:
+            raise DataContractError(
+                f"Dengue pedida, mas faltam {missing_dengue}. "
+                "Rode o runbook SINAN e regere o painel."
+            )
+        dynamic_cols = (*dynamic_cols, *DENGUE_FEATURE_COLS)
     extra_cols: tuple[str, ...] = ()
     if shock_memory:
         missing = [c for c in SHOCK_MEMORY_COLS if c not in enriched.columns]

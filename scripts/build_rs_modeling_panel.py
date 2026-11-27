@@ -94,6 +94,15 @@ def build_modeling_panel(
         pl.col("oni_c_lag4").fill_null(0.0),
         pl.col("enso_regime").fill_null("neutro"),
     )
+    dengue_path = DATA_PROCESSED / "rs_dengue_regiao_semanal.parquet"
+    if dengue_path.exists():
+        dengue = pl.read_parquet(dengue_path).select(
+            ["nome_regiao_saude", "ano_epi", "semana_epi", "dengue_casos"]
+        )
+        panel = panel.join(
+            dengue, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
+        ).with_columns(pl.col("dengue_casos").fill_null(0.0))
+
     panel = panel.sort(["nome_regiao_saude", "ano_epi", "semana_epi"])
     # Memória causal do choque (Task 1.3.5): a resposta de leitos chega semanas depois
     # da enchente; estas colunas dão ao modelo a exposição acumulada, não só a de t.
