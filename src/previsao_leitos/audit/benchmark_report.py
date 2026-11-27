@@ -33,6 +33,7 @@ from previsao_leitos.audit.comparison_plots import (
     plot_residuals_by_region,
 )
 from previsao_leitos.audit.dossier_compiler import _render_pdf_via_chromium
+from previsao_leitos.audit.pending_items import render_pending_items_html
 from previsao_leitos.demand.modeling import TARGET_SPECS
 
 _DISCLAIMER = "Not for patient care or live clinical use"
@@ -476,6 +477,8 @@ def render_report(
         )
         manifest_block = f"<h2>Reprodutibilidade</h2><ul>{items}</ul>"
 
+    pending_items_block = render_pending_items_html()
+
     body = f"""<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="utf-8"/>
 <title>Relatório de Benchmark — Leitos RS {eval_year}</title>
@@ -533,6 +536,10 @@ generalização é testada apenas no Marco M2.</li>
 <li>Custo de amostragem bayesiana é reportado por modelo; candidatos lentos não são
 removidos do relatório.</li>
 </ul>
+
+<h2>10. Pontos pendentes para estudo posterior</h2>
+<p>Acessos a dados e análises ainda em aberto, registrados para continuidade do projeto:</p>
+{pending_items_block}
 
 {manifest_block}
 

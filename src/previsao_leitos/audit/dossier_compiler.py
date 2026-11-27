@@ -31,6 +31,7 @@ import polars as pl
 
 from previsao_leitos.audit.data_hygiene import CLINICAL_DISCLAIMER, DataHygieneScorecard
 from previsao_leitos.audit.hypothesis_ledger import RatchetEvaluation
+from previsao_leitos.audit.pending_items import render_pending_items_html
 from previsao_leitos.audit.plots import plot_c6_hygiene_scorecard, plot_c7_ablation_delta
 from previsao_leitos.audit.report_builder import collect_runtime_manifest_metadata
 
@@ -442,6 +443,8 @@ def _render_html_from_dossier(
         "<div class='callout info'>Todos os resultados, falhas de higiene e eventuais rejeições "
         "da catraca Champion-Challenger são reportados integralmente sem omissão. O artefato "
         "CAMPEAO é atualizado exclusivamente mediante decisão PROMOTE.</div>"
+        "<h3>Pontos pendentes para estudo posterior (acessos a dados e análises em aberto)</h3>"
+        f"{render_pending_items_html()}"
         "</section>"
         "</body></html>"
     )

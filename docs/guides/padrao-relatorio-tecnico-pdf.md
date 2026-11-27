@@ -72,6 +72,7 @@ Todo relatório técnico-científico completo de avaliação de modelos ou resul
 
 ### Capítulo 6 — Abordagens de Melhoria e Novos Métodos para Explorar
 - **Melhorias Imediatas de Alta Alavancagem (curto prazo):** limitações honestamente diagnosticadas na versão atual + ação concreta e ganho esperado (ex.: reextração BigQuery `v3`, ingestão ao vivo de fontes finas, recalibração de surtos).
+- **Pontos Pendentes para Estudo Posterior (acessos a dados e análises em aberto):** seção obrigatória listando o que ficou para ser destravado depois — acessos ainda não concedidos (`SIVEP-Gripe`, `SINAN`, `S2iD/FIDE`, `ANA HidroWeb`), o erro de fase epidêmico investigado e os experimentos rejeitados na régua (trilha ENSO E1/E2/E3). A fonte única de verdade é `src/previsao_leitos/audit/pending_items.py` (espelhada em `docs/runbooks/acesso-bases-pendentes.md`).
 - **Novos Métodos para Explorar Posteriormente (fronteira de pesquisa / V2 Brasil):** cartões detalhando novos paradigmas promissores (`Hetero-ST-GNN`, `TimesFM 2.5 Apache-2.0`, `PyMC` MCMC/NUTS, otimização Pareto `pymoo`, *Adaptive Conformal Inference* + Fine-Gray, `SHAP` monotônico e validação *Leave-UF-Out*).
 - **Box de Conclusão Geral** sintetizando maturidade atual e próximo marco.
 

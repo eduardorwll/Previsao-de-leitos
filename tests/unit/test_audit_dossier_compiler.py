@@ -182,3 +182,18 @@ def test_compile_execution_dossier_creates_md_pdf_and_mirrors_champion(tmp_path:
     assert artifacts.mirrored_pdf_path.read_bytes().startswith(b"%PDF-")
     assert (downloads_mirror / "CAMPEAO_previsao_leitos_relatorio.pdf").exists()
     assert (downloads_mirror / "CAMPEAO_previsao_leitos_relatorio.md").exists()
+
+
+def test_pending_items_render_html_lists_data_access_and_open_analysis() -> None:
+    from previsao_leitos.audit.pending_items import (
+        PENDING_ITEMS,
+        render_pending_items_html,
+    )
+
+    assert len(PENDING_ITEMS) >= 5
+    html_out = render_pending_items_html()
+    assert html_out.startswith("<ul")
+    assert html_out.endswith("</ul>")
+    # Cobre os acessos pendentes e os pontos analíticos em aberto
+    for keyword in ("SIVEP-Gripe", "SINAN", "S2iD", "ANA HidroWeb", "fase", "ENSO", "catraca"):
+        assert keyword in html_out

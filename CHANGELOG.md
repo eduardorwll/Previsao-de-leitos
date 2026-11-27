@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Documentação de acessos pendentes + seção de "pontos para estudo posterior" nos PDFs:** registrada a tentativa de acesso às bases via SCPA em [docs/runbooks/acesso-bases-pendentes.md](docs/runbooks/acesso-bases-pendentes.md) (SIVEP-Gripe, SINAN, S2iD/FIDE, ANA HidroWeb — status + justificativa LGPD), e criado `src/previsao_leitos/audit/pending_items.py` como fonte única dos pontos pendentes, injetada no Capítulo 6 do dossiê (`dossier_compiler.py`) e na seção de limitações do benchmark (`benchmark_report.py`): erro de fase epidêmico (4,3–7,4 sem.), trilha ENSO E1/E2/E3 rejeitada e catraca de promoção reprovada no critério de fase.
+
+### Added
 - **BOM Niño 3.4 relativo semanal como covariável (`E2` / `Task 1.3.10`, Feature F28) — resultado negativo:** fetcher BOM (`rnino_3.4.txt`, CSV semanal `YYYYMMDD,YYYYMMDD,VALUE`) com cache SHA-256, projeção para grade ISO ancorada no `week_start` com lag de 1 semana (`bom_rnino`) e flag `--bom` (default off). Rejeitada na régua (6 folds): sem ganho material (`-0,27%` a `+0,63%` MASE). Fecha a trilha ENSO E1/E2/E3 com 3/3 índices redundantes com `el_nino_intensity`. Documentado em [docs/features/28-bom-rnino-resultado-negativo.md](docs/features/28-bom-rnino-resultado-negativo.md).
 
 ### Added
