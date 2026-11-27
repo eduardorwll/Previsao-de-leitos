@@ -463,6 +463,8 @@ def _run_targets_parallel(
                 command.append("--allow-holdout")
             if getattr(args, "roni", False):
                 command.append("--roni")
+            if getattr(args, "soi", False):
+                command.append("--soi")
             process = subprocess.Popen(  # noqa: S603 - comando montado internamente
                 command,
                 env=env,
@@ -566,6 +568,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
                     eval_year=args.eval_year,
                     allow_holdout=args.allow_holdout,
                     roni_features=args.roni,
+                    soi_features=args.soi,
                 )
             except DataContractError as exc:
                 print(f"[erro] {spec.key}: {exc}")
@@ -736,6 +739,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
             admissions_momentum=args.admissions_momentum,
             dengue_features=args.dengue,
             roni_features=args.roni,
+            soi_features=args.soi,
             run_id=run_id,
         )
         fold_frames.append(result.fold_metrics.with_columns(pl.lit(spec.key).alias("target")))
@@ -922,6 +926,12 @@ def build_parser() -> argparse.ArgumentParser:
             default=False,
             help="Inclui o RONI (índice relativo CPC, lag 2 meses) como feature.",
         )
+        p_bench.add_argument(
+            "--soi",
+            action="store_true",
+            default=False,
+            help="Inclui o SOI (índice atmosférico CPC, lag 1 mês) como feature.",
+        )
         p_bench.add_argument("--no-report", action="store_true", default=False)
         p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
         p_bench.add_argument("--allow-holdout", action="store_true", default=False)
@@ -971,6 +981,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Inclui o RONI (índice relativo CPC, lag 2 meses) como feature.",
+    )
+    p_bt.add_argument(
+        "--soi",
+        action="store_true",
+        default=False,
+        help="Inclui o SOI (índice atmosférico CPC, lag 1 mês) como feature.",
     )
     p_bt.add_argument("--no-report", action="store_true", default=False)
     p_bt.add_argument("--no-mirror-downloads", action="store_true", default=False)

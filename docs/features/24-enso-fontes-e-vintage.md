@@ -69,9 +69,9 @@ ligeiramente as métricas atuais; é o preço da honestidade causal.
 **Catraca de cada experimento:** ganho `>= 2%` no MASE mediano **ou** redução do erro de fase,
 com `0` violações monotônicas; caso contrário, rejeitado e documentado (como F20, F22, F23).
 
-> **Status dos experimentos:** **E1 (RONI) foi executado e rejeitado** pela régua — ver
-> [F26 — resultado negativo](26-roni-resultado-negativo.md). E3 (SOI) e E2 (BOM semanal)
-> permanecem na fila.
+> **Status dos experimentos:** **E1 (RONI) e E3 (SOI) foram executados e rejeitados** pela régua
+> — ver [F26 — RONI](26-roni-resultado-negativo.md) e [F27 — SOI](27-soi-resultado-negativo.md).
+> E2 (BOM semanal) permanece na fila.
 
 ## 6. O que **não** fazer
 

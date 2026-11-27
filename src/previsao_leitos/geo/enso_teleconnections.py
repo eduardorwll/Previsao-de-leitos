@@ -9,6 +9,7 @@ Fronteira obrigatória: Not for patient care or live clinical use.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from datetime import date, timedelta
 from typing import Literal
@@ -18,6 +19,9 @@ import polars as pl
 from previsao_leitos.domain import DataContractError
 
 EnsoRegime = Literal["el_nino_forte", "el_nino", "neutro", "la_nina"]
+
+#: Um valor mensal do CPC (ex.: `-0.7`, `-999.9`); tolera o sentinela de falta colado.
+_NOAA_MONTHLY_FLOAT = re.compile(r"-?\d+\.\d+")
 
 _NOAA_SEASON_TO_CENTER_MONTH: dict[str, int] = {
     "DJF": 1,
@@ -97,6 +101,51 @@ def parse_noaa_roni_table(raw_text: str) -> pl.DataFrame:
 
     if not rows:
         raise DataContractError("Tabela NOAA RONI vazia ou fora do formato esperado.")
+    return pl.DataFrame(rows).sort("data_ref")
+
+
+def parse_noaa_soi_table(raw_text: str) -> pl.DataFrame:
+    """Converte o arquivo ASCII oficial do NOAA CPC SOI (bloco STANDARDIZED) em DataFrame.
+
+    O arquivo tem dois blocos (`ANOMALY` e `STANDARDIZED DATA`); usamos o segundo
+    (SOI padronizado Tahiti-Darwin). Valores de falta são `-999.9` e podem aparecer
+    colados ao último valor válido na borda do mês corrente.
+    """
+    rows: list[dict[str, object]] = []
+    in_standardized = False
+    in_data = False
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        upper = stripped.upper()
+        if "STANDARDIZED" in upper:
+            in_standardized = True
+            in_data = False
+            continue
+        if not in_standardized:
+            continue
+        if upper.startswith("YEAR"):
+            in_data = True
+            continue
+        if not in_data:
+            continue
+        tokens = stripped.split()
+        if not tokens or not tokens[0].isdigit():
+            continue
+        year = int(tokens[0])
+        if year < 1951 or year > 2100:
+            continue
+        # Remove o token do ano e extrai os valores mensais (JAN..DEC) em ordem.
+        rest = stripped[len(tokens[0]) :]
+        values = [float(m.group()) for m in _NOAA_MONTHLY_FLOAT.finditer(rest)]
+        for month_idx, val in enumerate(values[:12], start=1):
+            if val <= -999.0:
+                continue
+            rows.append({"data_ref": date(year, month_idx, 1), "soi_std": val})
+
+    if not rows:
+        raise DataContractError("parse_noaa_soi_table: nenhum registro válido encontrado.")
     return pl.DataFrame(rows).sort("data_ref")
 
 
@@ -247,5 +296,39 @@ def build_causal_roni_weekly_features(
     lag_exprs: list[pl.Expr] = []
     for lag in sorted(set(lags)):
         lag_exprs.append(pl.col("roni_c").shift(lag).alias(f"roni_c_lag{lag}"))
+
+    return aligned.with_columns(lag_exprs).sort(["ano_epi", "semana_epi"])
+
+
+def build_causal_soi_weekly_features(
+    monthly_soi_df: pl.DataFrame,
+    *,
+    lags: Sequence[int] = (4, 12),
+    publication_lag_days: int = 30,
+) -> pl.DataFrame:
+    """Projeta o SOI mensal para grade semanal ISO com lag de publicação de 1 mês.
+
+    Produz a feature semanal `soi_std` (nível, componente atmosférico do ENSO) e
+    `soi_std_lag*`. O SOI é publicado com defasagem curta; o lag de 30 dias é o
+    piso honesto-causal recomendado em F24.
+    """
+    if "data_ref" not in monthly_soi_df.columns or "soi_std" not in monthly_soi_df.columns:
+        raise DataContractError(
+            "monthly_soi_df deve conter pelo menos as colunas 'data_ref' e 'soi_std'."
+        )
+    if monthly_soi_df.is_empty():
+        raise DataContractError("monthly_soi_df vazio.")
+    if any(lag < 1 for lag in lags):
+        raise DataContractError("Todos os lags de SOI devem ser >= 1 semana.")
+
+    aligned = _align_monthly_to_weekly_causal(
+        monthly_soi_df,
+        value_cols=("soi_std",),
+        publication_lag_days=publication_lag_days,
+    )
+
+    lag_exprs: list[pl.Expr] = []
+    for lag in sorted(set(lags)):
+        lag_exprs.append(pl.col("soi_std").shift(lag).alias(f"soi_std_lag{lag}"))
 
     return aligned.with_columns(lag_exprs).sort(["ano_epi", "semana_epi"])

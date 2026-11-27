@@ -385,3 +385,18 @@ def test_roni_features_require_the_column_and_enter_with_lags() -> None:
     )
     assert "roni_c_lag0" in splits.feature_cols
     assert "roni_c_lag2" in splits.feature_cols
+
+
+def test_soi_features_require_the_column_and_enter_with_lags() -> None:
+    panel = _synthetic_panel()
+    with pytest.raises(DataContractError):
+        make_modeling_splits(panel, target="uti_adulto", eval_year=2024, soi_features=True)
+
+    with_soi = panel.with_columns(
+        (pl.col("semana_epi").cast(pl.Float64) * 0.01 - 0.5).alias("soi_std")
+    )
+    splits = make_modeling_splits(
+        with_soi, target="uti_adulto", eval_year=2024, soi_features=True
+    )
+    assert "soi_std_lag0" in splits.feature_cols
+    assert "soi_std_lag2" in splits.feature_cols

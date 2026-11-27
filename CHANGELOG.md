@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **SOI como covariável (`E3` / `Task 1.3.10`, Feature F27) — resultado negativo:** fetcher CPC SOI (bloco `STANDARDIZED`, sentinela `-999.9` tratada) com cache SHA-256, projeção semanal causal com lag de 1 mês (`soi_std` em `geo/enso_teleconnections.py`) e flag `--soi` (default off). Rejeitada na régua (6 folds): sem ganho material (`-0,09%` a `+1,04%` MASE) — redundante com `el_nino_intensity` (ONI já embute o acoplamento oceano-atmosfera). Documentado em [docs/features/27-soi-resultado-negativo.md](docs/features/27-soi-resultado-negativo.md).
+
+### Added
 - **RONI como covariável (`E1` / `Task 1.3.10`, Feature F26) — resultado negativo:** fetcher primário CPC (`RONI.ascii.txt`) com cache SHA-256 e manifesto, projeção semanal causal com *publication lag* de 2 meses (`roni_c`/`roni_regime` em `geo/enso_teleconnections.py`) e flag `--roni` (default off) em `backtest`/`benchmark`. Rejeitada na régua (6 folds): piora o MASE em todos os alvos (`+0,13%` a `+0,86%`) por redundância com `el_nino_intensity` (ONI já no modelo); o lag de 2 meses ainda descarta o ENSO recente. Documentado em [docs/features/26-roni-resultado-negativo.md](docs/features/26-roni-resultado-negativo.md).
 
 ### Added

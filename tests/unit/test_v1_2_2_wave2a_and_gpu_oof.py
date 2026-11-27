@@ -22,6 +22,7 @@ from previsao_leitos.ingestion import (
     discover_gerint_poa_csv_urls,
     fetch_noaa_enso_monthly,
     fetch_noaa_roni_monthly,
+    fetch_noaa_soi_monthly,
     fetch_zenodo_iph_rs_metadata,
     ingest_gerint_poa_csv_lgpd,
     ingest_opendatasus_sinan_csv_lgpd,
@@ -167,6 +168,31 @@ def test_fetch_noaa_roni_monthly_parses_primary_cpc_source(tmp_path: Path) -> No
     # 2ª chamada usa o cache atômico SHA-256.
     _, meta2 = fetch_noaa_roni_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
     assert meta2.cache_hit
+
+
+def test_fetch_noaa_soi_monthly_parses_standardized_block(tmp_path: Path) -> None:
+    soi_txt = (
+        b"(STAND TAHITI - STAND DARWIN)  SEA LEVEL PRESS\n"
+        b"                    ANOMALY\n"
+        b"YEAR   JAN   FEB   MAR   APR   MAY   JUN   JUL   AUG   SEP   OCT   NOV   DEC\n"
+        b"1951   2.5   1.5  -0.2  -0.5  -1.1   0.3  -1.7  -0.4  -1.8  -1.6  -1.3  -1.2\n"
+        b"(STAND TAHITI - STAND DARWIN)  SEA LEVEL PRESS\n"
+        b"                    STANDARDIZED    DATA\n"
+        b"YEAR   JAN   FEB   MAR   APR   MAY   JUN   JUL   AUG   SEP   OCT   NOV   DEC\n"
+        b"1951   1.5   0.9  -0.1  -0.3  -0.7   0.2  -1.0  -0.2  -1.1  -1.0  -0.8  -0.7\n"
+        b"2024   0.5  -1.4   0.4  -0.2   0.5   0.0  -0.7   0.9  -0.1   0.5   0.5   1.2\n"
+        b"2025   0.2   0.5   1.7   0.5   0.4   0.3   0.6   0.4   0.0   1.1   1.1  -0.0\n"
+    )
+    fetcher = _FakeHttpFetcher(
+        {"https://www.cpc.ncep.noaa.gov/data/indices/soi": soi_txt}
+    )
+
+    soi_df, meta = fetch_noaa_soi_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
+    assert int(soi_df["data_ref"].dt.year().max()) == 2024
+    assert soi_df.height == 24  # 1951 (12) + 2024 (12); 2025 cortado por max_year
+    assert set(soi_df.columns) == {"data_ref", "soi_std"}
+    assert float(soi_df["soi_std"][0]) == pytest.approx(1.5)
+    assert not meta.cache_hit
 
 
 def test_resolve_accelerator_cpu_and_dataset_enso_cols_and_full_split_autograd() -> None:

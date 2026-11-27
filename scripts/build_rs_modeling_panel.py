@@ -17,8 +17,16 @@ from pathlib import Path
 import polars as pl
 
 from previsao_leitos.domain import DataContractError, SourceUnavailableError
-from previsao_leitos.geo import build_causal_enso_weekly_features, build_causal_roni_weekly_features
-from previsao_leitos.ingestion import fetch_noaa_enso_monthly, fetch_noaa_roni_monthly
+from previsao_leitos.geo import (
+    build_causal_enso_weekly_features,
+    build_causal_roni_weekly_features,
+    build_causal_soi_weekly_features,
+)
+from previsao_leitos.ingestion import (
+    fetch_noaa_enso_monthly,
+    fetch_noaa_roni_monthly,
+    fetch_noaa_soi_monthly,
+)
 
 DATA_RAW = Path("data/raw")
 DATA_PROCESSED = Path("data/processed")
@@ -105,6 +113,17 @@ def build_modeling_panel(
         panel = panel.join(roni_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
             pl.col("roni_c").fill_null(0.0),
             pl.col("roni_regime").fill_null("neutro"),
+        )
+    except (SourceUnavailableError, DataContractError):
+        pass
+    # SOI (Task 1.3.10 / E3): opcional, como o RONI — se inacessível, `--soi` falha na guarda.
+    try:
+        soi_monthly, _ = fetch_noaa_soi_monthly(cache_dir=enso_cache_dir, max_year=max_year)
+        soi_weekly = build_causal_soi_weekly_features(soi_monthly, lags=(4, 12)).select(
+            ["ano_epi", "semana_epi", "soi_std"]
+        )
+        panel = panel.join(soi_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
+            pl.col("soi_std").fill_null(0.0),
         )
     except (SourceUnavailableError, DataContractError):
         pass
