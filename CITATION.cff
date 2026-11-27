@@ -8,7 +8,7 @@ abstract: >-
   Inclui ingestão com LGPD, hidrologia calibrada, modelos probabilísticos de
   demanda, simulação de filas, auditoria contrafactual, explicabilidade auditada
   e um benchmark multi-modelo executável por linha de comando.
-version: "1.3.0"
+version: "1.4.0"
 date-released: "2026-11-26"
 license: MIT
 url: "https://github.com/eduardorwll/Previsao-de-leitos"

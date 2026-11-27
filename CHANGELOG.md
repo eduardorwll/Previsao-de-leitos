@@ -25,7 +25,7 @@ observados e preditos e emite relatório editorial. Notas completas em
 - Rotas e parâmetros do cliente ANA HidroWeb (`OAUth/v1`, `CodigoDaEstacao`, `TipoFiltroData`,
   `RangeIntervaloDeBusca`).
 
-## [Unreleased]
+## [1.4.0] — 2026-11-27
 
 ### Added
 - **README com seção "Modelo vs. realidade":** duas figuras comparativas (`docs/figures/comparativo_uti_adulto.png` e `comparativo_clinico.png`, geradas por `scripts/build_readme_figures.py`) mostrando o campeão `gbdt_conformal` (com banda P10–P90) frente à medição factual observada no RS 2024, com explicação breve e links para relatórios. Também documentadas a solicitação SIVEP-Gripe (`docs/runbooks/solicitacao-sivep-gripe.md`) e a resposta da ANA (acesso concedido + instabilidade no banco) em `docs/runbooks/acesso-bases-pendentes.md`.

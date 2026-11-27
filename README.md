@@ -10,7 +10,7 @@ contrafactual e — desde a `v1.3.0` — **um comando único** que roda 13 model
 compara leitos observados e preditos e emite um relatório em PDF.
 
 [![CI](https://github.com/eduardorwll/Previsao-de-leitos/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/eduardorwll/Previsao-de-leitos/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.3.0-0f766e)](https://github.com/eduardorwll/Previsao-de-leitos/releases/tag/v1.3.0)
+[![Release](https://img.shields.io/badge/release-v1.4.0-0f766e)](https://github.com/eduardorwll/Previsao-de-leitos/releases/tag/v1.4.0)
 [![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20by-uv-DE5FE9)](https://docs.astral.sh/uv/)
 [![Ruff](https://img.shields.io/badge/lint-ruff-261230)](https://docs.astral.sh/ruff/)
@@ -221,7 +221,8 @@ entradas e versões de ambiente.
 | Documento | Finalidade |
 | :--- | :--- |
 | **[Mapa de Progresso](docs/PROGRESSO.md)** | Etapas, features e status com marcação de progresso |
-| **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Notas da release: benchmark, paralelismo e GPU |
+| **[Release v1.4.0](docs/RELEASES/v1.4.0.md)** | Notas da release: régua de backtest, diagnóstico de fase e infraestrutura ENSO |
+| **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Benchmark executável, paralelismo e GPU |
 | **[Benchmark — Documentação](docs/benchmark/README.md)** | Metodologia, catálogo de métricas, erro percentual, rubrica A–D e cartões |
 | **[Feature F24 — Fontes ENSO e vintage](docs/features/24-enso-fontes-e-vintage.md)** | RONI, BOM semanal, SOI e o risco de revisão (`33,3%` de discordância de regime desde 2015) |
 | **[Feature F25 — Dengue (SINAN)](docs/features/25-dengue-sinan-resultado-negativo.md)** | Ingestão de `532,7 MB` e teste na régua — rejeitada |
@@ -259,7 +260,7 @@ Se este material apoiar sua pesquisa, cite a release:
   title        = {Previsão de Leitos Hospitalares sob Risco de Enchentes},
   author       = {{Equipe Previsão de Leitos}},
   year         = {2026},
-  version      = {1.3.0},
+  version      = {1.4.0},
   license      = {MIT},
   url          = {https://github.com/eduardorwll/Previsao-de-leitos}
 }
