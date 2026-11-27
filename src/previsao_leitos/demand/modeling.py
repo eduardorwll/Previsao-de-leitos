@@ -39,6 +39,14 @@ STATIC_FEATURE_COLS: tuple[str, ...] = (
     "capacidade_sem",
 )
 
+#: Internações por causa (momentum assistencial), opcional via `admissions_momentum=True`.
+ADMISSIONS_MOMENTUM_COLS: tuple[str, ...] = (
+    "internacoes_total",
+    "respiratorio_internacoes",
+    "leptospirose_internacoes",
+    "trauma_internacoes",
+)
+
 #: Memória causal do choque (Task 1.3.5), opcional via `shock_memory=True`.
 SHOCK_MEMORY_COLS: tuple[str, ...] = (
     "shock_cum_4w",
@@ -210,6 +218,7 @@ def make_modeling_splits(
     policy: SplitPolicy | None = None,
     allow_holdout: bool = False,
     shock_memory: bool = False,
+    admissions_momentum: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
     spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
@@ -222,6 +231,14 @@ def make_modeling_splits(
     validate_modeling_panel(panel, spec)
 
     enriched = attach_capacity(panel, spec)
+    dynamic_cols: tuple[str, ...] = DYNAMIC_FEATURE_COLS
+    if admissions_momentum:
+        missing_adm = [c for c in ADMISSIONS_MOMENTUM_COLS if c not in enriched.columns]
+        if missing_adm:
+            raise DataContractError(
+                f"Momentum de internações pedido, mas faltam {missing_adm} no painel."
+            )
+        dynamic_cols = (*DYNAMIC_FEATURE_COLS, *ADMISSIONS_MOMENTUM_COLS)
     extra_cols: tuple[str, ...] = ()
     if shock_memory:
         missing = [c for c in SHOCK_MEMORY_COLS if c not in enriched.columns]
@@ -240,7 +257,7 @@ def make_modeling_splits(
         enriched,
         entity_col="nome_regiao_saude",
         target_col=spec.column,
-        dynamic_feature_cols=DYNAMIC_FEATURE_COLS,
+        dynamic_feature_cols=dynamic_cols,
         static_feature_cols=STATIC_FEATURE_COLS,
         extra_feature_cols=extra_cols,
         horizon_weeks=horizon_weeks,
@@ -253,7 +270,7 @@ def make_modeling_splits(
         enriched,
         entity_col="nome_regiao_saude",
         target_col=spec.column,
-        dynamic_feature_cols=DYNAMIC_FEATURE_COLS,
+        dynamic_feature_cols=dynamic_cols,
         static_feature_cols=STATIC_FEATURE_COLS,
         extra_feature_cols=extra_cols,
         horizon_weeks=horizon_weeks,

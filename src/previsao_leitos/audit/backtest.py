@@ -277,6 +277,7 @@ def run_rolling_backtest(
     seed: int = 42,
     allow_holdout: bool = False,
     shock_memory: bool = False,
+    admissions_momentum: bool = False,
     run_id: str = "backtest",
 ) -> BacktestResult:
     """Roda o benchmark em cada fold e consolida a régua."""
@@ -299,6 +300,7 @@ def run_rolling_backtest(
             policy=policy,
             allow_holdout=allow_holdout,
             shock_memory=shock_memory,
+            admissions_momentum=admissions_momentum,
         )
         result = run_benchmark(
             splits,

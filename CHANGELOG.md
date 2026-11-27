@@ -28,6 +28,10 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Momentum de internações por causa (`Task 1.3.9b`, Feature F23):** flag `--admissions-momentum` inclui internações (total, respiratória, leptospirose, trauma) com defasagens causais. Ganho material no F04.1 para respiratório (`MASE 0,940 → 0,886`, `−5,7%`; `wMAPE 40,4% → 37,0%`), neutro/negativo no GBDT — evidência de que o gargalo do dois-estágios é sinal de dinâmica, não calibração.
+- **BigQuery desbloqueado:** o projeto válido é `previsao-leitos` (do `.env`); o erro anterior vinha de forçar o default `ai4good` do gcloud. S2iD e SIVEP permanecem inacessíveis sem a API key da Base dos Dados (`403/404`).
+
+### Added
 - **Ensemble com pesos calibrados (`Task 1.3.9a`, Feature F22) — resultado negativo:** `EnsembleForecaster` (pesos ∝ 1/MAE do ano de calibração, piso redistribuído, média dos quantis) e candidato `ensemble_top3`. Não supera o GBDT em UTI (`0,950` vs `0,943`), clínico (`0,956` vs `0,924`) nem necessidade; ganha apenas `0,5%` em respiratório. Membros correlacionados explicam a ausência de diversificação.
 
 ### Added
