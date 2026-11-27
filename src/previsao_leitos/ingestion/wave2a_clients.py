@@ -23,7 +23,10 @@ from typing import Protocol
 import polars as pl
 
 from previsao_leitos.domain import DataContractError, SourceUnavailableError
-from previsao_leitos.geo.enso_teleconnections import parse_noaa_oni_table
+from previsao_leitos.geo.enso_teleconnections import (
+    parse_noaa_oni_table,
+    parse_noaa_roni_table,
+)
 from previsao_leitos.ingestion.epidemiology_sources import (
     aggregate_gerint_poa_weekly,
     aggregate_sinan_leptospirose_weekly,
@@ -32,6 +35,9 @@ from previsao_leitos.ingestion.epidemiology_sources import (
 
 NOAA_ONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
 NOAA_MEI_V2_URL = "https://psl.noaa.gov/enso/mei/data/meiv2.data"
+#: RONI oficial do CPC (índice relativo). O JSON do elninolive (`/api/enso/roni`) é
+#: apenas cross-check de parsing em desenvolvimento; nunca é dependência de runtime.
+NOAA_RONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt"
 ZENODO_IPH_RS_RECORD_URL = "https://zenodo.org/api/records/16929471"
 GERINT_POA_CKAN_SEARCH_URL = "https://dadosabertos.poa.br/api/3/action/package_search?q=gerint"
 
@@ -188,6 +194,25 @@ def fetch_noaa_enso_monthly(
     if max_year is not None:
         df = df.filter(pl.col("data_ref").dt.year() <= max_year)
     return df.sort("data_ref"), manifests
+
+
+def fetch_noaa_roni_monthly(
+    *,
+    cache_dir: Path,
+    fetcher: HttpFetcher | None = None,
+    max_year: int | None = None,
+) -> tuple[pl.DataFrame, CachedPayload]:
+    """Baixa e parseia a série mensal oficial NOAA CPC RONI (1950-presente)."""
+    roni_bytes, roni_meta = fetch_cached_bytes(
+        NOAA_RONI_URL,
+        cache_dir=cache_dir,
+        filename="noaa_cpc_roni.ascii.txt",
+        fetcher=fetcher,
+    )
+    df = parse_noaa_roni_table(roni_bytes.decode("utf-8", errors="replace"))
+    if max_year is not None:
+        df = df.filter(pl.col("data_ref").dt.year() <= max_year)
+    return df.sort("data_ref"), roni_meta
 
 
 @dataclass(frozen=True)

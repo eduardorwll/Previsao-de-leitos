@@ -21,6 +21,7 @@ from previsao_leitos.hydrology import (
 from previsao_leitos.ingestion import (
     discover_gerint_poa_csv_urls,
     fetch_noaa_enso_monthly,
+    fetch_noaa_roni_monthly,
     fetch_zenodo_iph_rs_metadata,
     ingest_gerint_poa_csv_lgpd,
     ingest_opendatasus_sinan_csv_lgpd,
@@ -143,6 +144,29 @@ def test_wave2a_noaa_zenodo_gerint_and_opendatasus_clients_offline_with_sha256_c
         "https://opendatasus.saude.gov.br/sinan.csv", cache_dir=tmp_path, fetcher=fetcher
     )
     assert int(sn_agg["casos_notificados"].sum()) == 6
+
+
+def test_fetch_noaa_roni_monthly_parses_primary_cpc_source(tmp_path: Path) -> None:
+    roni_txt = (
+        b"SEAS   YR  ANOM\n"
+        b"DJF  2023 -0.86\n"
+        b"JFM  2023 -0.68\n"
+        b"OND  2023  1.42\n"
+        b"AMJ  2024 -0.28\n"
+        b"JJA  2025 -0.41\n"
+    )
+    fetcher = _FakeHttpFetcher(
+        {"https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt": roni_txt}
+    )
+
+    roni_df, meta = fetch_noaa_roni_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
+    assert int(roni_df["data_ref"].dt.year().max()) == 2024
+    assert roni_df.height == 4
+    assert set(roni_df.columns) == {"data_ref", "roni_c"}
+    assert not meta.cache_hit
+    # 2ª chamada usa o cache atômico SHA-256.
+    _, meta2 = fetch_noaa_roni_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
+    assert meta2.cache_hit
 
 
 def test_resolve_accelerator_cpu_and_dataset_enso_cols_and_full_split_autograd() -> None:

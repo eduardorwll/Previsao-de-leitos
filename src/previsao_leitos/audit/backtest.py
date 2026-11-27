@@ -279,6 +279,7 @@ def run_rolling_backtest(
     shock_memory: bool = False,
     admissions_momentum: bool = False,
     dengue_features: bool = False,
+    roni_features: bool = False,
     run_id: str = "backtest",
 ) -> BacktestResult:
     """Roda o benchmark em cada fold e consolida a régua."""
@@ -303,6 +304,7 @@ def run_rolling_backtest(
             shock_memory=shock_memory,
             admissions_momentum=admissions_momentum,
             dengue_features=dengue_features,
+            roni_features=roni_features,
         )
         result = run_benchmark(
             splits,

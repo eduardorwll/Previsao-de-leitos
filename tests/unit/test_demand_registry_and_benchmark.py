@@ -370,3 +370,18 @@ def test_dengue_features_require_the_column_and_enter_with_lags() -> None:
     )
     assert "dengue_casos_lag0" in splits.feature_cols
     assert "dengue_casos_lag2" in splits.feature_cols
+
+
+def test_roni_features_require_the_column_and_enter_with_lags() -> None:
+    panel = _synthetic_panel()
+    with pytest.raises(DataContractError):
+        make_modeling_splits(panel, target="uti_adulto", eval_year=2024, roni_features=True)
+
+    with_roni = panel.with_columns(
+        (pl.col("semana_epi").cast(pl.Float64) * 0.01 - 0.5).alias("roni_c")
+    )
+    splits = make_modeling_splits(
+        with_roni, target="uti_adulto", eval_year=2024, roni_features=True
+    )
+    assert "roni_c_lag0" in splits.feature_cols
+    assert "roni_c_lag2" in splits.feature_cols

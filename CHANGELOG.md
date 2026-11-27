@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **RONI como covariável (`E1` / `Task 1.3.10`, Feature F26) — resultado negativo:** fetcher primário CPC (`RONI.ascii.txt`) com cache SHA-256 e manifesto, projeção semanal causal com *publication lag* de 2 meses (`roni_c`/`roni_regime` em `geo/enso_teleconnections.py`) e flag `--roni` (default off) em `backtest`/`benchmark`. Rejeitada na régua (6 folds): piora o MASE em todos os alvos (`+0,13%` a `+0,86%`) por redundância com `el_nino_intensity` (ONI já no modelo); o lag de 2 meses ainda descarta o ENSO recente. Documentado em [docs/features/26-roni-resultado-negativo.md](docs/features/26-roni-resultado-negativo.md).
+
+### Added
 - **Dengue (SINAN) como covariável (`Task 1.3.8b`, Feature F25) — resultado negativo:** extração de `532,7 MB` (`br_ms_sinan.microdados_dengue`, 24.563 linhas, 2010–2024), agregação em 30 regiões (`370.914` casos) e flag `--dengue` (default off). Rejeitada na régua: piora em todos os alvos (`+0,2%` a `+3,7%`) — a correlação era sazonalidade já capturada.
 
 ### Added

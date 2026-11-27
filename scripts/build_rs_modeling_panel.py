@@ -16,8 +16,9 @@ from pathlib import Path
 
 import polars as pl
 
-from previsao_leitos.geo import build_causal_enso_weekly_features
-from previsao_leitos.ingestion import fetch_noaa_enso_monthly
+from previsao_leitos.domain import DataContractError, SourceUnavailableError
+from previsao_leitos.geo import build_causal_enso_weekly_features, build_causal_roni_weekly_features
+from previsao_leitos.ingestion import fetch_noaa_enso_monthly, fetch_noaa_roni_monthly
 
 DATA_RAW = Path("data/raw")
 DATA_PROCESSED = Path("data/processed")
@@ -94,6 +95,19 @@ def build_modeling_panel(
         pl.col("oni_c_lag4").fill_null(0.0),
         pl.col("enso_regime").fill_null("neutro"),
     )
+    # RONI (Task 1.3.10 / E1): opcional — se o CPC estiver inacessível, o painel
+    # segue sem `roni_c`/`roni_regime` e `--roni` falhará com DataContractError.
+    try:
+        roni_monthly, _ = fetch_noaa_roni_monthly(cache_dir=enso_cache_dir, max_year=max_year)
+        roni_weekly = build_causal_roni_weekly_features(roni_monthly, lags=(4, 12)).select(
+            ["ano_epi", "semana_epi", "roni_c", "roni_regime"]
+        )
+        panel = panel.join(roni_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
+            pl.col("roni_c").fill_null(0.0),
+            pl.col("roni_regime").fill_null("neutro"),
+        )
+    except (SourceUnavailableError, DataContractError):
+        pass
     dengue_path = DATA_PROCESSED / "rs_dengue_regiao_semanal.parquet"
     if dengue_path.exists():
         dengue = pl.read_parquet(dengue_path).select(
