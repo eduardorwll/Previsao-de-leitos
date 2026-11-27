@@ -194,6 +194,12 @@ entradas e versões de ambiente.
 | **[Mapa de Progresso](docs/PROGRESSO.md)** | Etapas, features e status com marcação de progresso |
 | **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Notas da release: benchmark, paralelismo e GPU |
 | **[Benchmark — Documentação](docs/benchmark/README.md)** | Metodologia, catálogo de métricas, erro percentual, rubrica A–D e cartões |
+| **[Feature F24 — Fontes ENSO e vintage](docs/features/24-enso-fontes-e-vintage.md)** | RONI, BOM semanal, SOI e o risco de revisão (`33,3%` de discordância de regime desde 2015) |
+| **[Feature F25 — Dengue (SINAN)](docs/features/25-dengue-sinan-resultado-negativo.md)** | Ingestão de `532,7 MB` e teste na régua — rejeitada |
+| **[Feature F23 — Momentum de internações](docs/features/23-momentum-internacoes.md)** | `−5,7%` no F04.1 respiratório |
+| **[Feature F22 — Ensemble calibrado](docs/features/22-ensemble-resultado-negativo.md)** | Pesos do ano de calibração — rejeitado |
+| **[Feature F20 — Memória do choque](docs/features/20-memoria-choque-resultado-negativo.md)** | Resultado negativo documentado |
+| **[Runbook — Ingestão S2iD/SINAN](docs/runbooks/ingest-s2id-sinan.md)** | Passo a passo de extração e LGPD |
 | **[Feature F19 — Nível Local no Estágio 1](docs/features/19-nivel-local-estagio-1.md)** | `−14%` a `−41%` de MASE no F04.1 com âncora de patamar |
 | **[Feature F18 — Série de Necessidade](docs/features/18-serie-necessidade-leitos.md)** | Alvo pré-registrado, três iterações auditadas e lacuna necessidade × ocupação |
 | **[Feature F17 — Régua de Backtest](docs/features/17-regua-backtest-origem-movel.md)** | 6 folds, ranking por mediana, nível × fase e métrica evento-condicional |
