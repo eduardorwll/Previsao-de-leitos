@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **README com seção "Modelo vs. realidade":** duas figuras comparativas (`docs/figures/comparativo_uti_adulto.png` e `comparativo_clinico.png`, geradas por `scripts/build_readme_figures.py`) mostrando o campeão `gbdt_conformal` (com banda P10–P90) frente à medição factual observada no RS 2024, com explicação breve e links para relatórios. Também documentadas a solicitação SIVEP-Gripe (`docs/runbooks/solicitacao-sivep-gripe.md`) e a resposta da ANA (acesso concedido + instabilidade no banco) em `docs/runbooks/acesso-bases-pendentes.md`.
+
+### Added
 - **Documentação de acessos pendentes + seção de "pontos para estudo posterior" nos PDFs:** registrada a tentativa de acesso às bases via SCPA em [docs/runbooks/acesso-bases-pendentes.md](docs/runbooks/acesso-bases-pendentes.md) (SIVEP-Gripe, SINAN, S2iD/FIDE, ANA HidroWeb — status + justificativa LGPD), e criado `src/previsao_leitos/audit/pending_items.py` como fonte única dos pontos pendentes, injetada no Capítulo 6 do dossiê (`dossier_compiler.py`) e na seção de limitações do benchmark (`benchmark_report.py`): erro de fase epidêmico (4,3–7,4 sem.), trilha ENSO E1/E2/E3 rejeitada e catraca de promoção reprovada no critério de fase.
 
 ### Added

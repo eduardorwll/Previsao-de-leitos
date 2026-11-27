@@ -53,10 +53,10 @@ PENDING_ITEMS: tuple[PendingItem, ...] = (
     ),
     PendingItem(
         title="ANA HidroWeb API v2",
-        status="aguardando habilitação do módulo (HTTP 401)",
+        status="acesso concedido (cadastro concluído; retestar após instabilidade do banco)",
         note=(
             "cotas e vazões fluviométricas (sinal físico real de enchente); fallback Zenodo "
-            "IPH-UFRGS mantém o pipeline operante enquanto a permissão não sai."
+            "IPH-UFRGS mantém o pipeline operante até a API ao vivo ser revalidada."
         ),
     ),
     PendingItem(

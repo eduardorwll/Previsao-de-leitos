@@ -27,6 +27,7 @@ compara leitos observados e preditos e emite um relatório em PDF.
 ## Sumário
 
 - [Destaques](#destaques)
+- [Modelo vs. realidade](#modelo-vs-realidade)
 - [Início rápido](#início-rápido)
 - [Benchmark em um comando](#benchmark-em-um-comando)
 - [Arquitetura](#arquitetura)
@@ -49,6 +50,34 @@ compara leitos observados e preditos e emite um relatório em PDF.
 | **Prontidão e filas (`SimPy`)** | `-65%` de eletivas adiadas e pico de fila `20,5 → 1,0` (POA) na fronteira de Pareto |
 | **Benchmark multi-modelo (`v1.3.0`)** | 13 modelos × 4 alvos em **434 s** (4 processos), PDF comparativo com 30 regiões |
 | **Explicabilidade e Bayes (`1.2.6`)** | SHAP 2 estágios com erro aditivo `5,3e-16`; MCMC com `R-hat 1,005` / `ESS 761` |
+
+---
+
+## Modelo vs. realidade
+
+Comparação direta entre o **campeão `gbdt_conformal`** (linha laranja, com banda de incerteza
+P10–P90) e a **medição factual observada** (linha preta, SIH-SUS) nas 30 regiões de saúde do RS
+no ano de auditoria (`2024`):
+
+<p align="center">
+  <img src="docs/figures/comparativo_uti_adulto.png" alt="UTI adulto — observado vs. predito" width="92%">
+</p>
+
+<p align="center">
+  <img src="docs/figures/comparativo_clinico.png" alt="Clínico — observado vs. predito" width="92%">
+</p>
+
+**Como ler:** o eixo vertical é o total regional por semana (UTI adulto em diárias semanais;
+clínico em pacientes-dia). O campeão acompanha a forma e o patamar da demanda — `MASE ≈ 0,94`
+(UTI adulto) e `≈ 0,92` (clínico) frente à persistência — mas ainda **erra o pico de inverno em
+~4–6 semanas**, uma limitação de causa epidêmica conhecida e registrada em
+[pontos pendentes](docs/runbooks/acesso-bases-pendentes.md).
+
+Relatórios completos com tabelas por região, calibração, catraca e contrafactuais:
+[Benchmark](docs/benchmark/README.md) ·
+[Padrão de relatório PDF](docs/guides/padrao-relatorio-tecnico-pdf.md) ·
+[Mapa de Progresso](docs/PROGRESSO.md) ·
+[CHANGELOG](CHANGELOG.md).
 
 ---
 
