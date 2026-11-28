@@ -27,6 +27,12 @@ observados e preditos e emite relatório editorial. Notas completas em
 
 ## [Unreleased]
 
+### Changed
+- **Task 2.1 — remoção do `dask` ([ADR-0008](docs/adr/0008-polars-over-dask.md)):** extra `scale` passa a ter apenas `aeon`/`torch-geometric`; `dask`/`distributed` (e transitivas `tornado`/`toolz`/`partd`/`zict`/`locket`/`tblib`) removidos de `pyproject.toml`/`uv.lock` (235 pacotes). Data lake nacional 2 níveis será implementado em `Polars` (global `< 16 GiB` + streaming `< 6 GiB`).
+
+### Added
+- **Estudo de estratégias não ortodoxas para adiantar a previsão ([F30](docs/features/30-estrategias-fase-analise.md)):** o campeão é persistência com lag `h=2` (corr `0,99`); o erro de fase decompõe-se nas features defasadas (`y_origin +2`, `y_roll4 +3–4`, `y_roll12 +5–8` sem.). O delta `y_{t+2}−y_t` é ruído (corr `< 0,05`); extrapolação de tendência não adianta o pico; correção de fase *a posteriori* é red herring. Recomendação: temperatura/vigilância viral como líderes e reenquadrar como *nowcast*, com metodologia de teste (régua + catraca + pré-registro) para nunca promover versão pior.
+
 ### Added
 - **Task 2.2 — LOS com riscos competitivos agregado + remoção do `scikit-survival` (GPL-3.0):** `AggregatedCompetingRisksLosEstimator` (hazard causa-específico + Aalen-Johansen, entrada agregada bucket-level LGPD-safe) em `demand/los.py`; `scikit-survival` removido de `pyproject.toml`/`uv.lock` (e deps transitivas `ecos`/`numexpr`/`osqp`). Diagnóstico de higiene (G1 = colinearidade mecânica `chuva_sem`×`chuva_catchment`; G4 = censura do holdout 2025) e de fase (campeão ≈ persistência com lag +2, corr 0,99) documentados em [docs/features/29](docs/features/29-diagnostico-higiene-fase-e-v2.md).
 

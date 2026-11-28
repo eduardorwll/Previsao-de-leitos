@@ -82,7 +82,7 @@ sim = [
     "pymoo>=0.6.1.3",
 ]
 scale = [
-    "dask[dataframe,distributed]>=2025.1.0",
+    # `dask` removido (Task 2.1): data lake nacional 2 níveis em Polars (global < 16 GiB + streaming).
     "aeon>=1.1.0",
     "torch-geometric>=2.6.1",
 ]

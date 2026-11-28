@@ -127,8 +127,9 @@
 - [ ] **Marco `M2` (`1.3.0`):** Executar avaliação final única congelada (`v1.2.0-rs-frozen`) no holdout (`2025` classificado sob PROBAST+AI + `2026` prospectivo virgem com `ChainLadderNowcaster`) e emitir PDF Editorial #2
 
 ### ⏳ Etapa 4 — Escala Nacional Brasil (27 UFs e Rede Nacional de Hospitais-Escola)
-- [ ] **Task 2.1:** Escalar ingestão e cubos espaciais para `5.570` municípios e `27` UFs exclusivamente com **`Polars 2.1.0`** em 2 níveis (passe global interestadual `< 16 GiB` + modo streaming portátil `< 6 GiB`; remover `dask` de `pyproject.toml`)
+- [~] **Task 2.1:** Escalar ingestão e cubos espaciais para `5.570` municípios e `27` UFs exclusivamente com **`Polars 2.1.0`** em 2 níveis (passe global interestadual `< 16 GiB` + modo streaming portátil `< 6 GiB`). ✅ `dask` removido do extra `scale` (`pyproject.toml`/`uv.lock`, [ADR-0008](adr/0008-polars-over-dask.md)); falta implementar o data lake 2 níveis em `Polars`.
 - [~] **Task 2.2:** LOS dinâmico com riscos competitivos (parcial): ✅ `AggregatedCompetingRisksLosEstimator` (hazard discreto + Aalen-Johansen, agregado LGPD-safe) em `demand/los.py` e **`scikit-survival` removido** (`pyproject.toml`/`uv.lock`); falta a query BigQuery agregada `(cnes, semana_epi, bucket, em_risco, alta, obito)` com supressão `n < 5` e o acoplamento ao `SimPy` ([29-diagnostico-higiene-fase-e-v2.md](features/29-diagnostico-higiene-fase-e-v2.md))
+- [x] **Estudo F30 — estratégias não ortodoxas para adiantar a previsão:** diagnóstico (campeão = persistência `h=2`; delta é ruído; erro de fase vem das features defasadas) e metodologia de teste anti-regressão ([30-estrategias-fase-analise.md](features/30-estrategias-fase-analise.md))
 - [ ] **Task 2.3:** Executar validação espacial *Leave-UF-Out* (`27` folds) e *Leave-Basin-Out* (`12` folds / `6` biomas) comparando `F04.1`, `Hetero-ST-GNN` (`PyG 2.8.1`), `HydroTFTNet` (`ADR-0004`) e `TimesFM 2.5` (benchmark externo isolado), com suporte opcional ao Tier 2 **Google Colab NVIDIA**
 - [ ] **Task 2.4:** Otimização multiobjetivo nacional (`pymoo` `NSGA-III` 4 objetivos + `SimPy` CRN 2 estágios) + `SHAP 0.54.1` nacional + PDF Editorial #3 (`Marco M3`)
 
