@@ -275,8 +275,8 @@ Metadados completos em [`CITATION.cff`](CITATION.cff).
 ## Licença
 
 Código sob **MIT** — veja [LICENSE](LICENSE). Dependências mantêm suas próprias licenças
-(`scikit-survival` é GPL-3.0 e está isolado no extra opcional `survival`, com remoção
-planejada na `Task 2.2`).
+(`scikit-survival` — GPL-3.0 — foi **removido** na `Task 2.2`, substituído pelo
+`AggregatedCompetingRisksLosEstimator` de hazard discreto em `demand/los.py`).
 
 ---
 

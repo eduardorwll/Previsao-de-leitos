@@ -18,7 +18,11 @@ from previsao_leitos.demand.extreme_uncertainty import (
     HierarchicalPosteriorSummary,
     MondrianEnsoConformalCalibrator,
 )
-from previsao_leitos.demand.los import SpecialtyLosEstimator
+from previsao_leitos.demand.los import (
+    AggregatedCompetingRisksLosEstimator,
+    AggregatedCompetingRisksSummary,
+    SpecialtyLosEstimator,
+)
 from previsao_leitos.demand.models import (
     QUANTILE_COL_NAMES,
     QUANTILE_LEVELS,
@@ -48,6 +52,8 @@ __all__ = [
     "QUANTILE_COL_NAMES",
     "QUANTILE_LEVELS",
     "AgACIConformalCalibrator",
+    "AggregatedCompetingRisksLosEstimator",
+    "AggregatedCompetingRisksSummary",
     "CanonicalPanelSchema",
     "ChainLadderNowcaster",
     "CompetingRisksLosEstimator",

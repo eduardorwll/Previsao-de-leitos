@@ -28,6 +28,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 ## [Unreleased]
 
 ### Added
+- **Task 2.2 — LOS com riscos competitivos agregado + remoção do `scikit-survival` (GPL-3.0):** `AggregatedCompetingRisksLosEstimator` (hazard causa-específico + Aalen-Johansen, entrada agregada bucket-level LGPD-safe) em `demand/los.py`; `scikit-survival` removido de `pyproject.toml`/`uv.lock` (e deps transitivas `ecos`/`numexpr`/`osqp`). Diagnóstico de higiene (G1 = colinearidade mecânica `chuva_sem`×`chuva_catchment`; G4 = censura do holdout 2025) e de fase (campeão ≈ persistência com lag +2, corr 0,99) documentados em [docs/features/29](docs/features/29-diagnostico-higiene-fase-e-v2.md).
+
+### Added
 - **Marco M1 — Dossiê Master `v1.4.0` (PDF editorial, 6 capítulos):** emitido via `previsao-leitos verify-rs` a partir do painel `v3` (`RS 2024`), com 6 figuras 300 DPI, scorecard de higiene, contrafactuais `SimPy` e a seção de pontos pendentes (SIVEP-Gripe, erro de fase, catraca). Artefatos versionados em [`docs/RELEASES/v1.4.0-dossie/`](docs/RELEASES/v1.4.0-dossie/) e linkados no README. Relatório transparente: higiene `FAIL` (G1 `VIF 5,31`, G4 censura `37,9%`) documentada no Capítulo 6.
 
 ## [1.4.0] — 2026-11-27
