@@ -19,7 +19,7 @@ as fontes já disponíveis (`SIH-SUS`, `CNES`, `MERGE-CPTEC`, `NASA POWER`, `ERA
 | 1 | **SIVEP-Gripe (SRAG viral)** | Indicador líder da onda respiratória epidêmica (influenza/COVID/VSR) que *lidera* o pico de demanda | ⛔ `403/404` sem API key da Base dos Dados | **Reduz o erro de fase (4,3–7,4 sem.)** — colunas `srag_viral_confirmado`/`frac_srag_viral` já previstas no `two_stage.py` |
 | 2 | **SINAN (Leptospirose)** | Onda 2 pós-enchente (leptospirose grave → UTI, D+7 a D+30) | ⚠️ dengue já extraída; leptospirose aguarda | Modelagem da Onda 2 |
 | 3 | **S2iD / FIDE (MIDR)** | Decretos + danos humanos (`desabrigados`, `enfermos`, danos a hospitais) | ⛔ download CSV via Playwright não dispara | Deslocamento populacional + dano à rede |
-| 4 | **ANA HidroWeb API v2** | Cotas/vazões (sinal físico real de enchente) | ✅ **acesso concedido** (cadastro concluído + senha enviada); retestar API | Hidrologia observada sem fallback |
+| 4 | **ANA HidroWeb API v2** | Cotas/vazões (sinal físico real de enchente) | ✅ **acesso concedido**; credenciais mantidas — se o `401` persistir, seguir com fallback Zenodo | Hidrologia observada (fallback ativo) |
 
 ## 3. Justificativa de acesso (uso pretendido)
 
@@ -38,21 +38,15 @@ uso assistencial ou operacional ao vivo. O tratamento é estritamente agregado n
 
 ## 4. Próximos passos
 
-1. **SIVEP-Gripe:** submeter a justificativa em
-   [`docs/runbooks/solicitacao-sivep-gripe.md`](solicitacao-sivep-gripe.md) (perfil de leitor
-   estadual) e obter a **API key gratuita da Base dos Dados** (`basedosdados.org`).
+1. **SIVEP-Gripe:** solicitação enviada — **aguardando resposta** (perfil de leitor estadual,
+   justificativa em `docs/runbooks/solicitacao-sivep-gripe.md`).
 2. **SINAN:** incluir leptospirose na mesma via de acesso (Base dos Dados / OpenDataSUS).
 3. **S2iD:** retomar inspecionando o *datepicker* do formulário (campo de data inicial ausente —
    ver `docs/runbooks/ingest-s2id-sinan.md`).
-4. **ANA HidroWeb (email recebido em 2026-11-27):** o cadastro na API foi **concluído** e a senha
-   enviada por e-mail (verificar caixa de spam). O `HTTP 401` anterior provavelmente decorreu da
-   **instabilidade no banco de dados da ANA** reportada no mesmo e-mail. Próximo passo:
-   - Confirmar o recebimento da senha (ou gerar nova em "Esqueceu sua senha?" no login da
-     Hidrotelemetria `https://www.snirh.gov.br/hidrotelemetria/Login2.aspx`);
-   - Atualizar `.env` com a senha vigente;
-   - **Retestar** a autenticação exigindo `source == "ana_hidroweb_v2"` (sem fallback Zenodo);
-   - Em sucesso, reexecutar `scripts/run_rs_f03_daily_ablation.py --require-live-ana` e registrar
-     `ana_provenance`.
+4. **ANA HidroWeb (email de 2026-11-27):** acesso **concedido**, mas **credenciais permanecem as
+   mesmas** (`.env` inalterado). Se o `HTTP 401` persistir, **seguir com o fallback Zenodo** sem
+   bloquear o trabalho — a instabilidade de banco reportada pela ANA provavelmente explica o erro.
+   Reteste adiado até o banco estabilizar; sem alterar credenciais.
 
 ## 5. Rastreabilidade
 
