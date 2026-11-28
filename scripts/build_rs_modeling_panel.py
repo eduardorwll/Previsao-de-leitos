@@ -16,19 +16,8 @@ from pathlib import Path
 
 import polars as pl
 
-from previsao_leitos.domain import DataContractError, SourceUnavailableError
-from previsao_leitos.geo import (
-    build_causal_bom_rnino_weekly,
-    build_causal_enso_weekly_features,
-    build_causal_roni_weekly_features,
-    build_causal_soi_weekly_features,
-)
-from previsao_leitos.ingestion import (
-    fetch_bom_rnino_weekly,
-    fetch_noaa_enso_monthly,
-    fetch_noaa_roni_monthly,
-    fetch_noaa_soi_monthly,
-)
+from previsao_leitos.geo import build_causal_enso_weekly_features
+from previsao_leitos.ingestion import fetch_noaa_enso_monthly
 
 DATA_RAW = Path("data/raw")
 DATA_PROCESSED = Path("data/processed")
@@ -105,76 +94,7 @@ def build_modeling_panel(
         pl.col("oni_c_lag4").fill_null(0.0),
         pl.col("enso_regime").fill_null("neutro"),
     )
-    # RONI (Task 1.3.10 / E1): opcional — se o CPC estiver inacessível, o painel
-    # segue sem `roni_c`/`roni_regime` e `--roni` falhará com DataContractError.
-    try:
-        roni_monthly, _ = fetch_noaa_roni_monthly(cache_dir=enso_cache_dir, max_year=max_year)
-        roni_weekly = build_causal_roni_weekly_features(roni_monthly, lags=(4, 12)).select(
-            ["ano_epi", "semana_epi", "roni_c", "roni_regime"]
-        )
-        panel = panel.join(roni_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
-            pl.col("roni_c").fill_null(0.0),
-            pl.col("roni_regime").fill_null("neutro"),
-        )
-    except (SourceUnavailableError, DataContractError):
-        pass
-    # SOI (Task 1.3.10 / E3): opcional, como o RONI — se inacessível, `--soi` falha na guarda.
-    try:
-        soi_monthly, _ = fetch_noaa_soi_monthly(cache_dir=enso_cache_dir, max_year=max_year)
-        soi_weekly = build_causal_soi_weekly_features(soi_monthly, lags=(4, 12)).select(
-            ["ano_epi", "semana_epi", "soi_std"]
-        )
-        panel = panel.join(soi_weekly, on=["ano_epi", "semana_epi"], how="left").with_columns(
-            pl.col("soi_std").fill_null(0.0),
-        )
-    except (SourceUnavailableError, DataContractError):
-        pass
-    # BOM Niño 3.4 relativo semanal (Task 1.3.10 / E2): opcional, como RONI/SOI.
-    try:
-        bom_weekly, _ = fetch_bom_rnino_weekly(cache_dir=enso_cache_dir, max_year=max_year)
-        bom_wk = build_causal_bom_rnino_weekly(bom_weekly).select(
-            ["ano_epi", "semana_epi", "bom_rnino"]
-        )
-        panel = panel.join(bom_wk, on=["ano_epi", "semana_epi"], how="left").with_columns(
-            pl.col("bom_rnino").fill_null(0.0),
-        )
-    except (SourceUnavailableError, DataContractError):
-        pass
-    dengue_path = DATA_PROCESSED / "rs_dengue_regiao_semanal.parquet"
-    if dengue_path.exists():
-        dengue = pl.read_parquet(dengue_path).select(
-            ["nome_regiao_saude", "ano_epi", "semana_epi", "dengue_casos"]
-        )
-        panel = panel.join(
-            dengue, on=["nome_regiao_saude", "ano_epi", "semana_epi"], how="left"
-        ).with_columns(pl.col("dengue_casos").fill_null(0.0))
-
     panel = panel.sort(["nome_regiao_saude", "ano_epi", "semana_epi"])
-    # Memória causal do choque (Task 1.3.5): a resposta de leitos chega semanas depois
-    # da enchente; estas colunas dão ao modelo a exposição acumulada, não só a de t.
-    panel = panel.with_columns(
-        pl.col("prob_enchente_f03_oof")
-        .rolling_sum(window_size=4, min_samples=1)
-        .over("nome_regiao_saude")
-        .alias("shock_cum_4w"),
-        pl.col("prob_enchente_f03_oof")
-        .rolling_sum(window_size=8, min_samples=1)
-        .over("nome_regiao_saude")
-        .alias("shock_cum_8w"),
-        pl.col("prob_enchente_f03_oof")
-        .rolling_max(window_size=8, min_samples=1)
-        .over("nome_regiao_saude")
-        .alias("shock_max_8w"),
-        pl.col("prob_enchente_f03_oof")
-        .ewm_mean(alpha=0.16, min_samples=1)
-        .over("nome_regiao_saude")
-        .alias("shock_ewm_4w"),
-    ).with_columns(
-        pl.col("shock_cum_4w").fill_null(0.0),
-        pl.col("shock_cum_8w").fill_null(0.0),
-        pl.col("shock_max_8w").fill_null(0.0),
-        pl.col("shock_ewm_4w").fill_null(0.0),
-    )
     return panel
 
 

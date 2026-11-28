@@ -20,10 +20,7 @@ from previsao_leitos.hydrology import (
 )
 from previsao_leitos.ingestion import (
     discover_gerint_poa_csv_urls,
-    fetch_bom_rnino_weekly,
     fetch_noaa_enso_monthly,
-    fetch_noaa_roni_monthly,
-    fetch_noaa_soi_monthly,
     fetch_zenodo_iph_rs_metadata,
     ingest_gerint_poa_csv_lgpd,
     ingest_opendatasus_sinan_csv_lgpd,
@@ -146,73 +143,6 @@ def test_wave2a_noaa_zenodo_gerint_and_opendatasus_clients_offline_with_sha256_c
         "https://opendatasus.saude.gov.br/sinan.csv", cache_dir=tmp_path, fetcher=fetcher
     )
     assert int(sn_agg["casos_notificados"].sum()) == 6
-
-
-def test_fetch_noaa_roni_monthly_parses_primary_cpc_source(tmp_path: Path) -> None:
-    roni_txt = (
-        b"SEAS   YR  ANOM\n"
-        b"DJF  2023 -0.86\n"
-        b"JFM  2023 -0.68\n"
-        b"OND  2023  1.42\n"
-        b"AMJ  2024 -0.28\n"
-        b"JJA  2025 -0.41\n"
-    )
-    fetcher = _FakeHttpFetcher(
-        {"https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt": roni_txt}
-    )
-
-    roni_df, meta = fetch_noaa_roni_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
-    assert int(roni_df["data_ref"].dt.year().max()) == 2024
-    assert roni_df.height == 4
-    assert set(roni_df.columns) == {"data_ref", "roni_c"}
-    assert not meta.cache_hit
-    # 2ª chamada usa o cache atômico SHA-256.
-    _, meta2 = fetch_noaa_roni_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
-    assert meta2.cache_hit
-
-
-def test_fetch_noaa_soi_monthly_parses_standardized_block(tmp_path: Path) -> None:
-    soi_txt = (
-        b"(STAND TAHITI - STAND DARWIN)  SEA LEVEL PRESS\n"
-        b"                    ANOMALY\n"
-        b"YEAR   JAN   FEB   MAR   APR   MAY   JUN   JUL   AUG   SEP   OCT   NOV   DEC\n"
-        b"1951   2.5   1.5  -0.2  -0.5  -1.1   0.3  -1.7  -0.4  -1.8  -1.6  -1.3  -1.2\n"
-        b"(STAND TAHITI - STAND DARWIN)  SEA LEVEL PRESS\n"
-        b"                    STANDARDIZED    DATA\n"
-        b"YEAR   JAN   FEB   MAR   APR   MAY   JUN   JUL   AUG   SEP   OCT   NOV   DEC\n"
-        b"1951   1.5   0.9  -0.1  -0.3  -0.7   0.2  -1.0  -0.2  -1.1  -1.0  -0.8  -0.7\n"
-        b"2024   0.5  -1.4   0.4  -0.2   0.5   0.0  -0.7   0.9  -0.1   0.5   0.5   1.2\n"
-        b"2025   0.2   0.5   1.7   0.5   0.4   0.3   0.6   0.4   0.0   1.1   1.1  -0.0\n"
-    )
-    fetcher = _FakeHttpFetcher(
-        {"https://www.cpc.ncep.noaa.gov/data/indices/soi": soi_txt}
-    )
-
-    soi_df, meta = fetch_noaa_soi_monthly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
-    assert int(soi_df["data_ref"].dt.year().max()) == 2024
-    assert soi_df.height == 24  # 1951 (12) + 2024 (12); 2025 cortado por max_year
-    assert set(soi_df.columns) == {"data_ref", "soi_std"}
-    assert float(soi_df["soi_std"][0]) == pytest.approx(1.5)
-    assert not meta.cache_hit
-
-
-def test_fetch_bom_rnino_weekly_parses_csv(tmp_path: Path) -> None:
-    bom_txt = (
-        b"20080728,20080803,0.20\n"
-        b"20080804,20080810,0.22\n"
-        b"20240101,20240107,1.41\n"
-        b"20250106,20250112,0.20\n"
-    )
-    fetcher = _FakeHttpFetcher(
-        {"https://www.bom.gov.au/clim_data/IDCK000072/rnino_3.4.txt": bom_txt}
-    )
-
-    bom_df, meta = fetch_bom_rnino_weekly(cache_dir=tmp_path, fetcher=fetcher, max_year=2024)
-    assert int(bom_df["week_start"].dt.year().max()) == 2024
-    assert bom_df.height == 3  # 2025 cortado por max_year
-    assert set(bom_df.columns) == {"week_start", "week_end", "bom_rnino"}
-    assert float(bom_df["bom_rnino"][0]) == pytest.approx(0.20)
-    assert not meta.cache_hit
 
 
 def test_resolve_accelerator_cpu_and_dataset_enso_cols_and_full_split_autograd() -> None:

@@ -71,10 +71,11 @@ PENDING_ITEMS: tuple[PendingItem, ...] = (
     ),
     PendingItem(
         title="Trilha ENSO E1/E2/E3 (RONI, SOI, BOM semanal)",
-        status="3/3 rejeitadas na régua (redundantes com el_nino_intensity)",
+        status="3/3 rejeitadas e removidas na higienização v1.5",
         note=(
-            "índices ENSO alternativos não injetam sinal preditivo novo em h=2; E4 (índice "
-            "consenso) permanece na fila, com baixa expectativa de ganho."
+            "índices ENSO alternativos não injetam sinal preditivo novo em h=2 (redundantes com "
+            "el_nino_intensity); código e flags removidos — ver "
+            "docs/features/RESULTADOS-NEGATIVOS.md."
         ),
     ),
     PendingItem(

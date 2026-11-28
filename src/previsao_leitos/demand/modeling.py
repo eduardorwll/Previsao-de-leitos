@@ -39,36 +39,16 @@ STATIC_FEATURE_COLS: tuple[str, ...] = (
     "capacidade_sem",
 )
 
-#: Dengue (SINAN agregado por região/semana), opcional via `dengue_features=True`.
-DENGUE_FEATURE_COLS: tuple[str, ...] = ("dengue_casos",)
-
 #: Internações por causa (momentum assistencial), opcional via `admissions_momentum=True`.
+#: Mantido por ter ganho parcial documentado (F23, respiratório) — os demais experimentos
+#: opcionais (dengue, memória do choque, RONI/SOI/BOM, temperatura) foram removidos como
+#: redundantes/rejeitados (ver docs/features/RESULTADOS-NEGATIVOS.md).
 ADMISSIONS_MOMENTUM_COLS: tuple[str, ...] = (
     "internacoes_total",
     "respiratorio_internacoes",
     "leptospirose_internacoes",
     "trauma_internacoes",
 )
-
-#: Memória causal do choque (Task 1.3.5), opcional via `shock_memory=True`.
-SHOCK_MEMORY_COLS: tuple[str, ...] = (
-    "shock_cum_4w",
-    "shock_cum_8w",
-    "shock_max_8w",
-    "shock_ewm_4w",
-)
-
-#: RONI (índice relativo do CPC, Task 1.3.10 / E1), opcional via `roni_features=True`.
-RONI_FEATURE_COLS: tuple[str, ...] = ("roni_c",)
-
-#: SOI (índice atmosférico do CPC, Task 1.3.10 / E3), opcional via `soi_features=True`.
-SOI_FEATURE_COLS: tuple[str, ...] = ("soi_std",)
-
-#: BOM Niño 3.4 relativo semanal (Task 1.3.10 / E2), opcional via `bom_features=True`.
-BOM_RNINO_FEATURE_COLS: tuple[str, ...] = ("bom_rnino",)
-
-#: Temperatura média semanal (F30), opcional via `temperature_features=True`.
-TEMPERATURE_FEATURE_COLS: tuple[str, ...] = ("temp_media_sem_c",)
 
 #: Colunas que precisam existir no painel montado antes do split.
 REQUIRED_MODELING_COLS: tuple[str, ...] = (
@@ -232,13 +212,7 @@ def make_modeling_splits(
     horizon_weeks: int = 2,
     policy: SplitPolicy | None = None,
     allow_holdout: bool = False,
-    shock_memory: bool = False,
     admissions_momentum: bool = False,
-    dengue_features: bool = False,
-    roni_features: bool = False,
-    soi_features: bool = False,
-    bom_features: bool = False,
-    temperature_features: bool = False,
 ) -> ModelingSplits:
     """Constrói `train`/`cal`/`eval` causais para um alvo, sem tocar no holdout."""
     spec = ALL_TARGET_SPECS[target] if isinstance(target, str) else target
@@ -259,55 +233,7 @@ def make_modeling_splits(
                 f"Momentum de internações pedido, mas faltam {missing_adm} no painel."
             )
         dynamic_cols = (*DYNAMIC_FEATURE_COLS, *ADMISSIONS_MOMENTUM_COLS)
-    if dengue_features:
-        missing_dengue = [c for c in DENGUE_FEATURE_COLS if c not in enriched.columns]
-        if missing_dengue:
-            raise DataContractError(
-                f"Dengue pedida, mas faltam {missing_dengue}. "
-                "Rode o runbook SINAN e regere o painel."
-            )
-        dynamic_cols = (*dynamic_cols, *DENGUE_FEATURE_COLS)
-    if roni_features:
-        missing_roni = [c for c in RONI_FEATURE_COLS if c not in enriched.columns]
-        if missing_roni:
-            raise DataContractError(
-                f"RONI pedido, mas faltam {missing_roni}. "
-                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
-            )
-        dynamic_cols = (*dynamic_cols, *RONI_FEATURE_COLS)
-    if soi_features:
-        missing_soi = [c for c in SOI_FEATURE_COLS if c not in enriched.columns]
-        if missing_soi:
-            raise DataContractError(
-                f"SOI pedido, mas faltam {missing_soi}. "
-                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
-            )
-        dynamic_cols = (*dynamic_cols, *SOI_FEATURE_COLS)
-    if bom_features:
-        missing_bom = [c for c in BOM_RNINO_FEATURE_COLS if c not in enriched.columns]
-        if missing_bom:
-            raise DataContractError(
-                f"BOM Niño 3.4 relativo pedido, mas faltam {missing_bom}. "
-                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
-            )
-        dynamic_cols = (*dynamic_cols, *BOM_RNINO_FEATURE_COLS)
-    if temperature_features:
-        missing_temp = [c for c in TEMPERATURE_FEATURE_COLS if c not in enriched.columns]
-        if missing_temp:
-            raise DataContractError(
-                f"Temperatura pedida, mas faltam {missing_temp}. "
-                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
-            )
-        dynamic_cols = (*dynamic_cols, *TEMPERATURE_FEATURE_COLS)
     extra_cols: tuple[str, ...] = ()
-    if shock_memory:
-        missing = [c for c in SHOCK_MEMORY_COLS if c not in enriched.columns]
-        if missing:
-            raise DataContractError(
-                f"Memória do choque pedida, mas faltam {missing}. "
-                "Regere o painel com `scripts/build_rs_modeling_panel.py`."
-            )
-        extra_cols = SHOCK_MEMORY_COLS
     origin_meta = enriched.select(
         ["nome_regiao_saude", "ano_epi", "semana_epi", "porte_regional", "enso_regime", "bacia_id"]
     )

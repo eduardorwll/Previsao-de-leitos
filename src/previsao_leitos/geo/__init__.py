@@ -20,15 +20,9 @@ from previsao_leitos.geo.calendar_grid import (
 from previsao_leitos.geo.enso_teleconnections import (
     ENSO_INDEX_COLUMNS,
     EnsoRegime,
-    build_causal_bom_rnino_weekly,
     build_causal_enso_weekly_features,
-    build_causal_roni_weekly_features,
-    build_causal_soi_weekly_features,
     classify_enso_regime,
-    parse_bom_rnino_table,
     parse_noaa_oni_table,
-    parse_noaa_roni_table,
-    parse_noaa_soi_table,
 )
 from previsao_leitos.geo.fine_hydro_sources import (
     aggregate_ana_hidroweb_weekly,
@@ -79,12 +73,9 @@ __all__ = [
     "aggregate_daily_to_iso_weekly",
     "aggregate_merge_cptec_weekly",
     "aggregate_sar_flood_extent",
-    "build_causal_bom_rnino_weekly",
     "build_causal_enso_weekly_features",
     "build_causal_landfill_exposure",
     "build_causal_referral_matrix",
-    "build_causal_roni_weekly_features",
-    "build_causal_soi_weekly_features",
     "build_complete_daily_grid",
     "build_complete_iso_week_grid",
     "build_ex_ante_distributed_lags",
@@ -95,9 +86,6 @@ __all__ = [
     "compute_estuarine_backwater_index",
     "evaluate_distributed_lag_tracer_bullet",
     "map_rs_health_region_to_basin",
-    "parse_bom_rnino_table",
     "parse_noaa_oni_table",
-    "parse_noaa_roni_table",
-    "parse_noaa_soi_table",
     "prepare_causal_weekly_panel",
 ]
