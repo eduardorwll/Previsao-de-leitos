@@ -467,6 +467,8 @@ def _run_targets_parallel(
                 command.append("--soi")
             if getattr(args, "bom", False):
                 command.append("--bom")
+            if getattr(args, "temperature", False):
+                command.append("--temperature")
             process = subprocess.Popen(  # noqa: S603 - comando montado internamente
                 command,
                 env=env,
@@ -572,6 +574,7 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
                     roni_features=args.roni,
                     soi_features=args.soi,
                     bom_features=args.bom,
+                    temperature_features=args.temperature,
                 )
             except DataContractError as exc:
                 print(f"[erro] {spec.key}: {exc}")
@@ -744,6 +747,7 @@ def _cmd_backtest(args: argparse.Namespace) -> int:
             roni_features=args.roni,
             soi_features=args.soi,
             bom_features=args.bom,
+            temperature_features=args.temperature,
             run_id=run_id,
         )
         fold_frames.append(result.fold_metrics.with_columns(pl.lit(spec.key).alias("target")))
@@ -942,6 +946,12 @@ def build_parser() -> argparse.ArgumentParser:
             default=False,
             help="Inclui o BOM Niño 3.4 relativo semanal (lag 1 sem.) como feature.",
         )
+        p_bench.add_argument(
+            "--temperature",
+            action="store_true",
+            default=False,
+            help="Inclui a temperatura média semanal como feature de demanda.",
+        )
         p_bench.add_argument("--no-report", action="store_true", default=False)
         p_bench.add_argument("--no-mirror-downloads", action="store_true", default=False)
         p_bench.add_argument("--allow-holdout", action="store_true", default=False)
@@ -1003,6 +1013,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Inclui o BOM Niño 3.4 relativo semanal (lag 1 sem.) como feature.",
+    )
+    p_bt.add_argument(
+        "--temperature",
+        action="store_true",
+        default=False,
+        help="Inclui a temperatura média semanal como feature de demanda.",
     )
     p_bt.add_argument("--no-report", action="store_true", default=False)
     p_bt.add_argument("--no-mirror-downloads", action="store_true", default=False)

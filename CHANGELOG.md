@@ -27,6 +27,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 
 ## [Unreleased]
 
+### Added
+- **Temperatura média semanal como covariável de demanda ([F31](docs/features/31-temperatura-resultado-negativo.md)) — resultado negativo:** flag `--temperature` (default off) inclui `temp_media_sem_c` (defasagens 0/1/2); rejeitada na régua (MASE `-0,18%` máx., fase só `-0,45` sem. em UTI) — redundante com os harmônicos sazonais. Confirma o F30: o líder precisa ser a onda viral/laboratorial, não o frio médio.
+
 ### Changed
 - **Task 2.1 — remoção do `dask` ([ADR-0008](docs/adr/0008-polars-over-dask.md)):** extra `scale` passa a ter apenas `aeon`/`torch-geometric`; `dask`/`distributed` (e transitivas `tornado`/`toolz`/`partd`/`zict`/`locket`/`tblib`) removidos de `pyproject.toml`/`uv.lock` (235 pacotes). Data lake nacional 2 níveis será implementado em `Polars` (global `< 16 GiB` + streaming `< 6 GiB`).
 

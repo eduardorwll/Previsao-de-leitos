@@ -415,3 +415,20 @@ def test_bom_features_require_the_column_and_enter_with_lags() -> None:
     )
     assert "bom_rnino_lag0" in splits.feature_cols
     assert "bom_rnino_lag2" in splits.feature_cols
+
+
+def test_temperature_features_require_the_column_and_enter_with_lags() -> None:
+    panel = _synthetic_panel()
+    with pytest.raises(DataContractError):
+        make_modeling_splits(
+            panel, target="uti_adulto", eval_year=2024, temperature_features=True
+        )
+
+    with_temp = panel.with_columns(
+        (20.0 - pl.col("semana_epi").cast(pl.Float64) * 0.1).alias("temp_media_sem_c")
+    )
+    splits = make_modeling_splits(
+        with_temp, target="uti_adulto", eval_year=2024, temperature_features=True
+    )
+    assert "temp_media_sem_c_lag0" in splits.feature_cols
+    assert "temp_media_sem_c_lag2" in splits.feature_cols
