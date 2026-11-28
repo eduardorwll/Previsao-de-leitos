@@ -1,0 +1,54 @@
+{
+  "overall_status": "FAIL",
+  "passed_count": 1,
+  "warn_count": 0,
+  "failed_count": 2,
+  "disclaimer": "Pesquisa aberta e avaliação metodológica. Not for patient care or live clinical use.",
+  "gates": [
+    {
+      "gate_id": "G8",
+      "name": "Trava Anti-Rótulo Degenerado de Surto (0 >= 0)",
+      "status": "PASS",
+      "observed_value": 0.0,
+      "threshold": 0.0,
+      "unit": "casos",
+      "summary": "0 rótulo(s) de surto degenerados com y <= 1e-09 (0.00% das observações).",
+      "details": {
+        "degenerate_count": 0,
+        "degenerate_rate_pct": 0.0,
+        "total_observations": 1560
+      }
+    },
+    {
+      "gate_id": "G1",
+      "name": "Colinearidade de Covariáveis (VIF)",
+      "status": "FAIL",
+      "observed_value": 5.3139,
+      "threshold": 5.0,
+      "unit": "VIF",
+      "summary": "VIF máximo observado = 5.31 (limite <= 5.00).",
+      "details": {
+        "n_rows": 25020,
+        "vif_by_feature": {
+          "chuva_sem_mm": 5.3139,
+          "chuva_catchment_mm": 5.3139
+        }
+      }
+    },
+    {
+      "gate_id": "G4",
+      "name": "Detector de Censura à Direita (Atraso de Processamento)",
+      "status": "FAIL",
+      "observed_value": 37.9481,
+      "threshold": 25.0,
+      "unit": "%",
+      "summary": "Queda máxima nas últimas 4 semanas = 37.9% vs. mediana de referência (6665.0; limite <= 25.0%).",
+      "details": {
+        "reference_median": 6664.9506,
+        "min_tail_value": 4135.7314,
+        "tail_weeks": 4,
+        "reference_weeks": 12
+      }
+    }
+  ]
+}

@@ -74,6 +74,7 @@ clínico em pacientes-dia). O campeão acompanha a forma e o patamar da demanda 
 [pontos pendentes](docs/runbooks/acesso-bases-pendentes.md).
 
 Relatórios completos com tabelas por região, calibração, catraca e contrafactuais:
+[Dossiê Master (PDF, 6 capítulos)](docs/RELEASES/v1.4.0-dossie/relatorio_execucao_completo.pdf) ·
 [Benchmark](docs/benchmark/README.md) ·
 [Padrão de relatório PDF](docs/guides/padrao-relatorio-tecnico-pdf.md) ·
 [Mapa de Progresso](docs/PROGRESSO.md) ·
@@ -222,6 +223,7 @@ entradas e versões de ambiente.
 | :--- | :--- |
 | **[Mapa de Progresso](docs/PROGRESSO.md)** | Etapas, features e status com marcação de progresso |
 | **[Release v1.4.0](docs/RELEASES/v1.4.0.md)** | Notas da release: régua de backtest, diagnóstico de fase e infraestrutura ENSO |
+| **[Dossiê Master v1.4.0 (PDF)](docs/RELEASES/v1.4.0-dossie/relatorio_execucao_completo.pdf)** | Marco M1: 6 capítulos, scorecard de higiene, contrafactuais `SimPy` e pontos pendentes |
 | **[Release v1.3.0](docs/RELEASES/v1.3.0.md)** | Benchmark executável, paralelismo e GPU |
 | **[Benchmark — Documentação](docs/benchmark/README.md)** | Metodologia, catálogo de métricas, erro percentual, rubrica A–D e cartões |
 | **[Feature F24 — Fontes ENSO e vintage](docs/features/24-enso-fontes-e-vintage.md)** | RONI, BOM semanal, SOI e o risco de revisão (`33,3%` de discordância de regime desde 2015) |

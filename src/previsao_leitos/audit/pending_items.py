@@ -28,7 +28,7 @@ class PendingItem:
 PENDING_ITEMS: tuple[PendingItem, ...] = (
     PendingItem(
         title="SIVEP-Gripe (SRAG viral)",
-        status="acesso pendente (403/404 sem API key da Base dos Dados)",
+        status="solicitação enviada; aguardando resposta (perfil de leitor estadual)",
         note=(
             "indicador líder da onda respiratória epidêmica (influenza/COVID/VSR); as colunas "
             "srag_viral_confirmado/frac_srag_viral já são previstas no two_stage.py, mas estão "

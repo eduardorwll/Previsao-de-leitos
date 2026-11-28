@@ -25,6 +25,11 @@ observados e preditos e emite relatório editorial. Notas completas em
 - Rotas e parâmetros do cliente ANA HidroWeb (`OAUth/v1`, `CodigoDaEstacao`, `TipoFiltroData`,
   `RangeIntervaloDeBusca`).
 
+## [Unreleased]
+
+### Added
+- **Marco M1 — Dossiê Master `v1.4.0` (PDF editorial, 6 capítulos):** emitido via `previsao-leitos verify-rs` a partir do painel `v3` (`RS 2024`), com 6 figuras 300 DPI, scorecard de higiene, contrafactuais `SimPy` e a seção de pontos pendentes (SIVEP-Gripe, erro de fase, catraca). Artefatos versionados em [`docs/RELEASES/v1.4.0-dossie/`](docs/RELEASES/v1.4.0-dossie/) e linkados no README. Relatório transparente: higiene `FAIL` (G1 `VIF 5,31`, G4 censura `37,9%`) documentada no Capítulo 6.
+
 ## [1.4.0] — 2026-11-27
 
 ### Added
