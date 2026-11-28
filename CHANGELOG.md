@@ -27,6 +27,9 @@ observados e preditos e emite relatório editorial. Notas completas em
 
 ## [Unreleased]
 
+### Added
+- **Spike neural quantílico de demanda (F32) — rejeitado:** `NeuralQuantileForecaster` (MLP com cabeça P10–P95, *pinball loss*, `torch` lazy) como candidato `neural_quantile`. Régua 6 folds: **pior** em todos os alvos (`+2,5%` a `+12,1%` de MASE; pior que a persistência em UTI/clínico) e fase pior — nova classe de modelo **não** quebra a persistência sem líder (confirma F30). Código mantido como candidato opt-in transparente (não promovido).
+
 ### Removed
 - **Higienização v1.5 — experimentos rejeitados removidos:** flags e código de `--dengue`, `--shock-memory`, `--roni`, `--soi`, `--bom`, `--temperature` (guardas, fetchers/parsers/builders, joins do painel e testes). Documentação consolidada em [docs/features/RESULTADOS-NEGATIVOS.md](docs/features/RESULTADOS-NEGATIVOS.md). Mantidos o campeão `gbdt_conformal` e os melhores métodos (`--admissions-momentum`, ENSO **ONI**, hidrologia de enchente, conformal `Flood`/`AgACI`/`SPCI`, `SimPy`/`pareto`, LOS com riscos competitivos).
 

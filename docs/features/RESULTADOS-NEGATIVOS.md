@@ -22,6 +22,7 @@ monotônicas.
 | **F27 — SOI (ENSO atmosférico)** | `soi_std` (lag 1 mês) | `-0,09%` a `+1,04%` | ❌ | Redundante com ONI |
 | **F28 — BOM Niño 3.4 semanal** | `bom_rnino` (lag 1 sem.) | `-0,27%` a `+0,63%` | ❌ | Redundante com ONI |
 | **F31 — Temperatura média** | `temp_media_sem_c` | `-0,18%` máx., fase `-0,45` sem. | ❌ | Redundante com harmônicos sazonais |
+| **F32 — Neural quantílico (MLP)** | MLP P10–P95 (pinball) | `+2,5%` a `+12,1%` (pior; pior que a persistência em UTI/clínico) | ❌ | Nova classe sem líder **não** quebra a persistência |
 
 > **F23 (momentum de internações)** foi **parcialmente aceito** (ganho em respiratório, `−5,7%`
 > no F04.1) e **permanece** como flag opt-in `--admissions-momentum`.
@@ -41,6 +42,13 @@ monotônicas.
 `build_causal_enso_weekly_features` (ENSO **ONI**, que alimenta `el_nino_intensity`), hidrologia de
 enchente, conformal (`Flood`/`AgACI`/`SPCI`), `PyMC` hierárquico, `SimPy`/`pareto`, LOS com riscos
 competitivos agregado, régua de backtest, catraca e dossiê M1.
+
+> **F32 (spike neural) — mantido como candidato, rejeitado:** o MLP quantílico
+> (`NeuralQuantileForecaster`, `demand/neural_quantile.py`, `--models neural_quantile`) foi testado
+> contra o campeão nas 6 folds e ficou **pior** em todos os alvos (`+2,5%` a `+12,1%` de MASE; pior
+> que a persistência em UTI/clínico) e com fase pior. **Conclusão:** uma nova classe de modelo
+> (neural) **não** quebra a persistência sem um indicador líder — reforça o F30. O código é mantido
+> como candidato opt-in transparente (não promovido, fora de `--models champion`).
 
 ## 3. Por que a redução é segura
 

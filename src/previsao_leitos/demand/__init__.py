@@ -31,6 +31,7 @@ from previsao_leitos.demand.models import (
     PooledRidgeDeltaForecaster,
     QuantileGBDTForecaster,
 )
+from previsao_leitos.demand.neural_quantile import NeuralQuantileForecaster
 from previsao_leitos.demand.nowcasting import (
     ChainLadderNowcaster,
     CompetingRisksLosEstimator,
@@ -67,6 +68,7 @@ __all__ = [
     "MondrianEnsoConformalCalibrator",
     "MonotonicSurgeClassifier",
     "NegativeBinomialHurdleForecaster",
+    "NeuralQuantileForecaster",
     "OrthogonalTwoStageOccupancyForecaster",
     "PooledRidgeDeltaForecaster",
     "QuantileGBDTForecaster",

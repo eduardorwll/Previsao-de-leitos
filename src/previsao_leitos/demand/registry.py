@@ -24,6 +24,7 @@ from previsao_leitos.demand.models import (
     PooledRidgeDeltaForecaster,
     QuantileGBDTForecaster,
 )
+from previsao_leitos.demand.neural_quantile import NeuralQuantileForecaster
 from previsao_leitos.demand.two_stage import OrthogonalTwoStageOccupancyForecaster
 from previsao_leitos.domain import DataContractError
 
@@ -252,6 +253,14 @@ _CANDIDATES: tuple[CandidateSpec, ...] = (
         factory=_hierarchical,
         requires=("pymc", "arviz"),
         description="Challenger 1.2.6: pooling parcial Região ⊂ Bacia (Negative Binomial).",
+    ),
+    CandidateSpec(
+        name="neural_quantile",
+        family="neural",
+        fit_mode="plain",
+        factory=NeuralQuantileForecaster,
+        requires=("torch",),
+        description="Spike V2: MLP quantílico (P10-P95) treinado com pinball loss.",
     ),
 )
 
