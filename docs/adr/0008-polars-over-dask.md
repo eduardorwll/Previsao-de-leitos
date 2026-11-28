@@ -41,6 +41,9 @@ sem `dask`.
 
 - `dask`/`distributed` (e transitivas `tornado`, `toolz`, `partd`, `zict`, `locket`, `tblib`)
   removidos de `pyproject.toml`/`uv.lock`; **235 pacotes** no lock (vs. 243).
-- A implementação do data lake 2 níveis em `Polars` fica como o restante da `Task 2.1`.
+- **Data lake 2 níveis implementado** em `src/previsao_leitos/ingestion/data_lake.py`:
+  - `write_hive_partitioned` (escrita atômica `.tmp` + `os.replace`, partições `uf=`/`bacia=`),
+  - `scan_hive_partitioned` (nível 1, lazy com `hive_partitioning=True`),
+  - `sink_hive_partitioned` (nível 2, streaming por partição via `sink_parquet`).
 - Se um dia o volume exigir processamento verdadeiramente distribuído, a decisão pode ser
   reavaliada com benchmark medido (registrado em `PERF.md`), não por precaução.

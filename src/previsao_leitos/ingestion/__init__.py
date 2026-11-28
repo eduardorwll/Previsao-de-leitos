@@ -2,6 +2,11 @@
 
 from previsao_leitos.ingestion.adapters import BigQueryAdapter, ParquetFixtureAdapter
 from previsao_leitos.ingestion.cache import AtomicParquetCache
+from previsao_leitos.ingestion.data_lake import (
+    scan_hive_partitioned,
+    sink_hive_partitioned,
+    write_hive_partitioned,
+)
 from previsao_leitos.ingestion.epidemiology_sources import (
     aggregate_gerint_poa_weekly,
     aggregate_sinan_leptospirose_weekly,
@@ -106,9 +111,12 @@ __all__ = [
     "ingest_opendatasus_sinan_csv_lgpd",
     "ingest_opendatasus_sivep_csv_lgpd",
     "parse_noaa_mei_v2_table",
+    "scan_hive_partitioned",
+    "sink_hive_partitioned",
     "suppress_small_cells",
     "validate_no_pii_columns",
     "validate_sih_active_census_frame",
     "validate_sih_delay_triangle_frame",
     "validate_sih_external_referral_matrix_frame",
+    "write_hive_partitioned",
 ]

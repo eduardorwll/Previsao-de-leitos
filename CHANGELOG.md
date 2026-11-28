@@ -34,7 +34,10 @@ observados e preditos e emite relatório editorial. Notas completas em
 - **Temperatura média semanal como covariável de demanda ([F31](docs/features/RESULTADOS-NEGATIVOS.md)) — resultado negativo:** flag `--temperature` (default off) inclui `temp_media_sem_c` (defasagens 0/1/2); rejeitada na régua (MASE `-0,18%` máx., fase só `-0,45` sem. em UTI) — redundante com os harmônicos sazonais. Confirma o F30: o líder precisa ser a onda viral/laboratorial, não o frio médio.
 
 ### Changed
-- **Task 2.1 — remoção do `dask` ([ADR-0008](docs/adr/0008-polars-over-dask.md)):** extra `scale` passa a ter apenas `aeon`/`torch-geometric`; `dask`/`distributed` (e transitivas `tornado`/`toolz`/`partd`/`zict`/`locket`/`tblib`) removidos de `pyproject.toml`/`uv.lock` (235 pacotes). Data lake nacional 2 níveis será implementado em `Polars` (global `< 16 GiB` + streaming `< 6 GiB`).
+- **Task 2.1 — data lake nacional 2 níveis em Polars (`ingestion/data_lake.py`):** `write_hive_partitioned` (escrita atômica Hive `uf=`/`bacia=`), `scan_hive_partitioned` (nível 1, lazy com pushdown) e `sink_hive_partitioned` (nível 2, streaming por partição via `sink_parquet`); 6 testes de round-trip/partição/guardas ([ADR-0008](docs/adr/0008-polars-over-dask.md)).
+
+### Changed
+- **Task 2.1 — remoção do `dask` ([ADR-0008](docs/adr/0008-polars-over-dask.md)):** extra `scale` passa a ter apenas `aeon`/`torch-geometric`; `dask`/`distributed` (e transitivas `tornado`/`toolz`/`partd`/`zict`/`locket`/`tblib`) removidos de `pyproject.toml`/`uv.lock` (235 pacotes).
 
 ### Added
 - **Estudo de estratégias não ortodoxas para adiantar a previsão ([F30](docs/features/30-estrategias-fase-analise.md)):** o campeão é persistência com lag `h=2` (corr `0,99`); o erro de fase decompõe-se nas features defasadas (`y_origin +2`, `y_roll4 +3–4`, `y_roll12 +5–8` sem.). O delta `y_{t+2}−y_t` é ruído (corr `< 0,05`); extrapolação de tendência não adianta o pico; correção de fase *a posteriori* é red herring. Recomendação: temperatura/vigilância viral como líderes e reenquadrar como *nowcast*, com metodologia de teste (régua + catraca + pré-registro) para nunca promover versão pior.
